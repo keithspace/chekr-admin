@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "692565424167",
+    "project_id": "chekr1",
+    "storage_bucket": "chekr1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:692565424167:android:fa33c7192cdfacf6eb3602",
+        "android_client_info": {
+          "package_name": "com.example.checkoutapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJ7eS3aVt5KDsSHkx925wctFCKEWEwGpE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
