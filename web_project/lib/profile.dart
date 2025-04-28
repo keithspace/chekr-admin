@@ -34,6 +34,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   Widget? _rightSideContent;
   bool get isAdmin => adminData?['task'] == 'Administrator';
   Timer? _inactivityTimer;
+  bool isMobile = false;
 
   @override
   void initState() {
@@ -47,7 +48,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       prefs.remove('adminId');
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => AdminLoginPage()),
-            (Route<dynamic> route) => false,
+        (Route<dynamic> route) => false,
       );
     });
   }
@@ -63,9 +64,9 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
-    _inactivityTimer = Timer(const Duration(minutes: 10), _logoutDueToInactivity);
+    _inactivityTimer =
+        Timer(const Duration(minutes: 10), _logoutDueToInactivity);
   }
-
 
   Future<void> _loadAdminData() async {
     final firebase_auth.User? user = _auth.currentUser;
@@ -194,8 +195,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     }
   }
 
-
-  void _showUserInquiries() {
+  /*void _showUserInquiries() {
     setState(() {
       _rightSideContent = UserInquiriesPage(
         onInquirySelected: (inquiry) {
@@ -252,7 +252,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         },
       );
     });
-  }
+  }*/
 
   Widget _buildPromoMessageEditor() {
     String message = '';
@@ -346,6 +346,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       ),
     );
   }
+
   Widget _buildWideInfoDisplay() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -525,82 +526,99 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  Widget _buildEditForm() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: 80), // Limit field height
-          child: TextFormField(
+  /*Widget _buildEditForm() {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
             controller: _nameController,
             style: TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Name',
               labelStyle: TextStyle(color: Colors.white70),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey[800],
             ),
           ),
-        ),
-        SizedBox(height: 12), // Reduced spacing
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: 80),
-          child: TextFormField(
+          SizedBox(height: 16),
+          TextFormField(
             controller: _emailController,
             style: TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Email',
               labelStyle: TextStyle(color: Colors.white70),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey[800],
             ),
           ),
-        ),
-        SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: 80),
-          child: TextFormField(
+          SizedBox(height: 16),
+          TextFormField(
             controller: _phoneController,
             style: TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Phone',
               labelStyle: TextStyle(color: Colors.white70),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey[800],
             ),
           ),
-        ),
-        SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _isEditing = false;
-                });
-              },
-              child: Text('Cancel', style: TextStyle(color: Colors.white)),
-            ), // **Added missing closing bracket here**
-            SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _updateAdminDetails,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+          SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isEditing = false;
+                  });
+                },
+                child: Text('Cancel', style: TextStyle(color: Colors.white)),
               ),
-              child: Text('Save'),
-            ),
-          ],
+              SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () {
+                  _updateAdminDetails();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                ),
+                child: Text('Save'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }*/
+
+  Widget _buildTaskButton(
+    BuildContext context,
+    String text,
+    bool enabled,
+    VoidCallback onPressed,
+    bool isMobile, // Add this parameter
+  ) {
+    return SizedBox(
+      width: isMobile ? double.infinity : null,
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        child: Text(text),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: enabled ? Color(0xFF0A0E21) : Colors.grey,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          minimumSize: Size(isMobile ? double.infinity : 150, 50),
         ),
-      ],
+      ),
     );
   }
 
-
-  Widget _buildInfoDisplay() {
+  /*Widget _buildInfoDisplay() {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth > 600) {
@@ -610,60 +628,60 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         }
       },
     );
-  }
+  }*/
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 768;
-    const double cardHeight = 250;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     // If mobile and right side content is shown, only show that
     if (isMobile && _rightSideContent != null) {
       return Scaffold(
+        appBar: AppBar(
+          title: Text('Admin Panel', style: GoogleFonts.poppins()),
+          backgroundColor: colorScheme.surface,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () => setState(() => _rightSideContent = null),
+          ),
+        ),
         body: _rightSideContent!,
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Admin Profile',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: const Color(0xFF0A0E21),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => AdminHomePage()),
-            );
-          },
-        ),
-      ),
+      backgroundColor: colorScheme.surface,
       body: adminData == null
           ? Center(child: CircularProgressIndicator())
           : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Left Side Panel
                 Expanded(
-                  flex: 2,
+                  flex: isMobile ? 1 : 2,
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        Center(
-                          child: Column(
-                            children: [
-                              GestureDetector(
-                                onTap: _uploadProfilePicture,
-                                child: Stack(
+                        // Profile Card
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                Stack(
                                   alignment: Alignment.bottomRight,
                                   children: [
                                     CircleAvatar(
                                       radius: 50,
+                                      backgroundColor:
+                                          colorScheme.primary.withOpacity(0.1),
                                       backgroundImage: profilePicUrl != null
                                           ? NetworkImage(profilePicUrl!)
                                           : null,
@@ -671,253 +689,99 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                                           ? CircularProgressIndicator()
                                           : profilePicUrl == null
                                               ? Icon(Icons.person,
-                                                  size: 50, color: Colors.white)
+                                                  size: 50,
+                                                  color: colorScheme.onSurface)
                                               : null,
                                     ),
-                                    Container(
-                                      padding: EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Color(0xFF1D1E33),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(Icons.add,
-                                          size: 20, color: Colors.white),
+                                    FloatingActionButton.small(
+                                      onPressed: _uploadProfilePicture,
+                                      backgroundColor: colorScheme.primary,
+                                      child: Icon(Icons.camera_alt, size: 20),
                                     ),
                                   ],
                                 ),
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                adminData?['name'] ?? 'No Name',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                adminData?['task'] ?? 'No Task',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 18, color: Colors.white70),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 24),
-                        // Personal Information Card with tap to exit edit
-                        GestureDetector(
-                          onTap: () {
-                            if (_isEditing) {
-                              setState(() {
-                                _isEditing = false;
-                              });
-                            }
-                          },
-                          child: Card(
-                            elevation: 4,
-                            color: Color(0xFF1D1E33),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Personal Information',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      if (!_isEditing) // Only show edit button when not editing
-                                        ElevatedButton.icon(
-                                          icon: Icon(Icons.edit, size: 16),
-                                          label: Text('Edit'),
-                                          onPressed: () {
-                                            setState(() {
-                                              _isEditing = true;
-                                            });
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Color(0xFF0A0E21),
-                                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                                SizedBox(height: 16),
+                                Text(
+                                  adminData?['name'] ?? 'No Name',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  Divider(
-                                    color: Colors.white.withOpacity(0.2),
-                                    thickness: 1,
+                                ),
+                                SizedBox(height: 4),
+                                Chip(
+                                  label: Text(
+                                    adminData?['task'] ?? 'No Role',
+                                    style: GoogleFonts.poppins(fontSize: 14),
                                   ),
-                                  SizedBox(height: 16),
-                                  if (_isEditing)
-                                    LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        return SizedBox(
-                                          height: constraints.maxHeight * 0.7, // Use 70% of available height
-                                          child: SingleChildScrollView(
-                                            child: _buildEditForm(),
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  else
-                                    _buildInfoDisplay(),
-                                ],
-                              ),
+                                  backgroundColor:
+                                      colorScheme.primary.withOpacity(0.2),
+                                ),
+                                SizedBox(height: 16),
+                                Divider(),
+                                SizedBox(height: 16),
+                                _buildInfoSection(),
+                              ],
                             ),
                           ),
                         ),
+
                         SizedBox(height: 16),
-                        // Tasks Card
-                        SizedBox(
-                          height: cardHeight,
-                          child: Card(
-                            elevation: 4,
-                            color: Color(0xFF1D1E33),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Tasks',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
+
+                        // Admin Tools Card
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Admin Tools',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  SizedBox(height: 16),
-                                  Expanded(
-                                    child: Center(
-                                      child: Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        alignment: WrapAlignment.center,
-                                        children: [
-                                          ElevatedButton(
-                                            onPressed: isAdmin ? () {
-                                              setState(() {
-                                                _rightSideContent = CreateAdminForm(
-                                                  onCreateAdmin: _createAdmin,
-                                                  onClose: () => setState(() => _rightSideContent = null),
-                                                );
-                                              });
-                                              if (isMobile) {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => Scaffold(
-                                                      body: _rightSideContent!,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            } : null,
-                                            child: Text('Create Admin'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: isAdmin ? Color(0xFF0A0E21) : Colors.grey,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: isAdmin ? () {
-                                              setState(() {
-                                                _rightSideContent = AdminListPage(
-                                                  onAdminSelected: _deleteAdmin,
-                                                  onTaskUpdated: (String adminId, String newTask) {
-                                                    _updateAdminTask(adminId, newTask);
-                                                  },
-                                                  onClose: () => setState(() => _rightSideContent = null),
-                                                );
-                                              });
-                                              if (isMobile) {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => Scaffold(
-                                                      body: _rightSideContent!,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            } : null,
-                                            child: Text('View Admins'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: isAdmin ? Color(0xFF0A0E21) : Colors.grey,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () {
-                                              _showUserInquiries();
-                                              if (isMobile) {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => Scaffold(
-                                                      body: _rightSideContent!,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            },
-                                            child: Text('Respond to Inquiries'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Color(0xFF0A0E21),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () {
-                                              setState(() {
-                                                _rightSideContent = _buildPromoMessageEditor();
-                                              });
-                                              if (isMobile) {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => Scaffold(
-                                                      body: _rightSideContent!,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            },
-                                            child: Text('Update Promo Message'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Color(0xFF0A0E21),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                ),
+                                SizedBox(height: 16),
+                                GridView.count(
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  crossAxisCount: isMobile ? 1 : 2,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12,
+                                  childAspectRatio: 3,
+                                  children: [
+                                    _buildToolButton(
+                                      icon: Icons.person_add,
+                                      label: 'Create Admin',
+                                      enabled: isAdmin,
+                                      onTap: () => _showAdminCreation(isMobile),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    _buildToolButton(
+                                      icon: Icons.people,
+                                      label: 'View Admins',
+                                      enabled: isAdmin,
+                                      onTap: () => _showAdminList(isMobile),
+                                    ),
+                                    _buildToolButton(
+                                      icon: Icons.chat,
+                                      label: 'User Inquiries',
+                                      enabled: true,
+                                      onTap: () => _showUserInquiries(isMobile),
+                                    ),
+                                    _buildToolButton(
+                                      icon: Icons.campaign,
+                                      label: 'Message',
+                                      enabled: true,
+                                      onTap: () => _showPromoEditor(isMobile),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -925,219 +789,434 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                     ),
                   ),
                 ),
+
+                // Right Side Content
                 if (_rightSideContent != null && !isMobile) ...[
-                  VerticalDivider(color: Colors.white),
+                  VerticalDivider(width: 1, thickness: 1),
                   Expanded(
-                    flex: 2,
-                    child: _rightSideContent!,
+                    flex: 3,
+                    child: Scaffold(
+                      appBar: AppBar(
+                        title:
+                            Text('Admin Panel', style: GoogleFonts.poppins()),
+                        backgroundColor: colorScheme.surface,
+                        leading: IconButton(
+                          icon: Icon(Icons.close),
+                          onPressed: () =>
+                              setState(() => _rightSideContent = null),
+                        ),
+                      ),
+                      body: _rightSideContent!,
+                    ),
                   ),
                 ],
               ],
             ),
     );
   }
+
+  Widget _buildInfoSection() {
+    return _isEditing ? _buildEditForm() : _buildInfoDisplay();
+  }
+
+  Widget _buildToolButton({
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return ElevatedButton(
+      onPressed: enabled ? onTap : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: enabled
+            ? Theme.of(context).colorScheme.primaryContainer
+            : Colors.grey.shade300,
+        foregroundColor: enabled
+            ? Theme.of(context).colorScheme.onPrimaryContainer
+            : Colors.grey.shade600,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20),
+          SizedBox(width: 8),
+          Text(label, style: GoogleFonts.poppins(fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditForm() {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _nameController,
+          decoration: InputDecoration(
+            labelText: 'Full Name',
+            prefixIcon: Icon(Icons.person),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        SizedBox(height: 16),
+        TextFormField(
+          controller: _emailController,
+          decoration: InputDecoration(
+            labelText: 'Email',
+            prefixIcon: Icon(Icons.email),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        SizedBox(height: 16),
+        TextFormField(
+          controller: _phoneController,
+          decoration: InputDecoration(
+            labelText: 'Phone',
+            prefixIcon: Icon(Icons.phone),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            OutlinedButton(
+              onPressed: () => setState(() => _isEditing = false),
+              child: Text('Cancel'),
+            ),
+            SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _updateAdminDetails,
+              child: Text('Save Changes'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoDisplay() {
+    final isWide = MediaQuery.of(context).size.width > 600;
+    final textStyle = GoogleFonts.poppins(fontSize: 14);
+    final boldTextStyle = textStyle.copyWith(fontWeight: FontWeight.w600);
+
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(Icons.person, size: 24),
+          title: Text('Name', style: textStyle),
+          subtitle: Text(adminData?['name'] ?? 'No Name', style: boldTextStyle),
+          trailing: IconButton(
+            icon: Icon(Icons.edit, size: 20),
+            onPressed: () => setState(() => _isEditing = true),
+          ),
+        ),
+        Divider(height: 1),
+        ListTile(
+          leading: Icon(Icons.email, size: 24),
+          title: Text('Email', style: textStyle),
+          subtitle:
+              Text(adminData?['email'] ?? 'No Email', style: boldTextStyle),
+        ),
+        Divider(height: 1),
+        ListTile(
+          leading: Icon(Icons.phone, size: 24),
+          title: Text('Phone', style: textStyle),
+          subtitle:
+              Text(adminData?['phone'] ?? 'No Phone', style: boldTextStyle),
+        ),
+        Divider(height: 1),
+        ListTile(
+          leading: Icon(Icons.work, size: 24),
+          title: Text('Role', style: textStyle),
+          subtitle: Text(adminData?['task'] ?? 'No Role', style: boldTextStyle),
+        ),
+      ],
+    );
+  }
+
+  void _showAdminCreation(bool isMobile) {
+    final content = CreateAdminForm(
+      onCreateAdmin: (email, password, name, phone, task) {
+        _createAdmin(email, password, name, phone, task);
+        setState(() => _rightSideContent = null);
+      },
+      onClose: () => setState(() => _rightSideContent = null),
+    );
+
+    if (isMobile) {
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Scaffold(
+              appBar: AppBar(title: Text('Create Admin')),
+              body: content,
+            ),
+          ));
+    } else {
+      setState(() => _rightSideContent = content);
+    }
+  }
+
+  void _showAdminList(bool isMobile) {
+    final content = AdminListPage(
+      onAdminSelected: _deleteAdmin,
+      onTaskUpdated: _updateAdminTask,
+      onClose: () => setState(() => _rightSideContent = null),
+    );
+
+    if (isMobile) {
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Scaffold(
+              appBar: AppBar(title: Text('Admin List')),
+              body: content,
+            ),
+          ));
+    } else {
+      setState(() => _rightSideContent = content);
+    }
+  }
+
+  void _showUserInquiries(bool isMobile) {
+    final content = UserInquiriesPage(
+      onInquirySelected: (inquiry) {
+        setState(() {
+          _rightSideContent = ConversationPage(
+            inquiryId: inquiry['id'],
+            userId: inquiry['userId'],
+            userName: inquiry['userName'],
+            description: inquiry['description'],
+            isResponded: inquiry['isResponded'],
+            adminName: adminData?['name'] ?? 'Admin',
+            onBackPressed: () => setState(() => _rightSideContent = null),
+          );
+        });
+      },
+      onBackPressed: () => setState(() => _rightSideContent = null),
+    );
+
+    if (isMobile) {
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Scaffold(body: content),
+          ));
+    } else {
+      setState(() => _rightSideContent = content);
+    }
+  }
+
+  void _showPromoEditor(bool isMobile) {
+    final content = _buildPromoMessageEditor();
+
+    if (isMobile) {
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Scaffold(
+              appBar: AppBar(title: Text('Update Promo')),
+              body: content,
+            ),
+          ));
+    } else {
+      setState(() => _rightSideContent = content);
+    }
+  }
 }
 
 // [Rest of your existing classes (CreateAdminForm, AdminListPage, UserInquiriesPage, ConversationPage) remain exactly the same]
 
 // Create Admin Form
-class CreateAdminForm extends StatelessWidget {
+class CreateAdminForm extends StatefulWidget {
   final Function(String, String, String, String, String) onCreateAdmin;
-  final VoidCallback? onClose;
+  final VoidCallback onClose;
 
-  CreateAdminForm({required this.onCreateAdmin, this.onClose});
+  const CreateAdminForm({
+    required this.onCreateAdmin,
+    required this.onClose,
+    Key? key,
+  }) : super(key: key);
 
+  @override
+  _CreateAdminFormState createState() => _CreateAdminFormState();
+}
+
+class _CreateAdminFormState extends State<CreateAdminForm> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _taskController = TextEditingController();
+  String? _selectedTask;
 
-  final _formKey = GlobalKey<FormState>(); // Form key for validation
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
+    final theme = Theme.of(context);
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
+    return Container(
+      padding: isMobile ? EdgeInsets.zero : EdgeInsets.all(16),
       child: Card(
         elevation: 4,
-        color: Color(0xFF1D1E33),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Stack(
-            children: [
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Create Admin',
-                          style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close, color: Colors.white),
-                          onPressed:
-                              onClose ?? () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-                    // Name Field
-                    TextFormField(
-                      controller: _nameController,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Name',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+          padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!isMobile)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Create Admin',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Name is required';
-                        }
-                        if (!RegExp(r'^[a-zA-Z ]+$').hasMatch(value)) {
-                          return 'Name should only contain alphabetic characters';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 16),
-                    // Email Field
-                    TextFormField(
-                      controller: _emailController,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                      IconButton(
+                        icon: Icon(Icons.close),
+                        onPressed: widget.onClose,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Email is required';
-                        }
-                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                            .hasMatch(value)) {
-                          return 'Enter a valid email address';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 16),
-                    // Password Field
-                    TextFormField(
-                      controller: _passwordController,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                    ],
+                  ),
+                if (!isMobile) SizedBox(height: 16),
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Full Name',
+                          prefixIcon: Icon(Icons.person),
+                          border: OutlineInputBorder(),
                         ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty)
+                            return 'Name is required';
+                          return null;
+                        },
                       ),
-                      obscureText: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Password is required';
-                        }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 16),
-                    // Phone Field
-                    TextFormField(
-                      controller: _phoneController,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Phone (e.g., 712345678)',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email),
+                          border: OutlineInputBorder(),
                         ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty)
+                            return 'Email is required';
+                          if (!value.contains('@')) return 'Enter valid email';
+                          return null;
+                        },
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Phone is required';
-                        }
-                        if (!RegExp(r'^\d{9}$').hasMatch(value)) {
-                          return 'Phone must be 9 digits (e.g., 712345678)';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 16),
-                    // Task Dropdown
-                    DropdownButtonFormField<String>(
-                      value: _taskController.text.isEmpty
-                          ? null
-                          : _taskController.text,
-                      decoration: InputDecoration(
-                        labelText: 'Task',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: Icon(Icons.lock),
+                          border: OutlineInputBorder(),
                         ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty)
+                            return 'Password is required';
+                          if (value.length < 6) return 'Minimum 6 characters';
+                          return null;
+                        },
                       ),
-                      items:
-                          ['Inventory Manager', 'Cashier', 'Exit Tech'].map((String task) {
-                        return DropdownMenuItem<String>(
-                          value: task,
-                          child:
-                              Text(task, style: TextStyle(color: Colors.white)),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        _taskController.text = value!;
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Task is required';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (_formKey.currentState!.validate()) {
-                          // Prefix phone with +254
-                          final phone = '+254${_phoneController.text}';
-                          onCreateAdmin(
-                            _emailController.text,
-                            _passwordController.text,
-                            _nameController.text,
-                            phone,
-                            _taskController.text,
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: 'Phone',
+                          prefixIcon: Icon(Icons.phone),
+                          border: OutlineInputBorder(),
+                          hintText: '712345678',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty)
+                            return 'Phone is required';
+                          if (value.length != 9) return '9 digits required';
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: _selectedTask,
+                        decoration: InputDecoration(
+                          labelText: 'Role',
+                          prefixIcon: Icon(Icons.work),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          'Administrator',
+                          'Inventory Manager',
+                          'Cashier',
+                          'Exit Tech'
+                        ].map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
                           );
-                        }
-                      },
-                      child: Text('Create Admin'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF0A0E21),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedTask = newValue;
+                          });
+                        },
+                        validator: (value) =>
+                            value == null ? 'Role is required' : null,
+                      ),
+                      SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            widget.onCreateAdmin(
+                              _emailController.text,
+                              _passwordController.text,
+                              _nameController.text,
+                              '+254${_phoneController.text}',
+                              _selectedTask!,
+                            );
+                          }
+                        },
+                        child: Text('Create Admin'),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1147,7 +1226,6 @@ class CreateAdminForm extends StatelessWidget {
 
 // Admin List Page
 class AdminListPage extends StatelessWidget {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Function(String) onAdminSelected;
   final Function(String, String) onTaskUpdated;
   final VoidCallback? onClose;
@@ -1160,148 +1238,137 @@ class AdminListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(isMobile ? 0 : 16.0),
       child: Card(
         elevation: 4,
-        color: Color(0xFF1D1E33),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
+        color: Color(0xFF1E1E1E), // Dark card background
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Admin List',
-                        style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.white),
-                        onPressed: onClose ?? () => Navigator.of(context).pop(),
-                      ),
-                    ],
+                  Text(
+                    'Admin List',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white, // White text for better contrast
+                    ),
                   ),
-                  SizedBox(height: 16),
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: _firestore.collection('admins').snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return Center(
-                              child: Text('No admins found',
-                                  style:
-                                  GoogleFonts.poppins(color: Colors.white)));
-                        }
-                        final admins = snapshot.data!.docs;
-                        return ListView.builder(
-                          physics: AlwaysScrollableScrollPhysics(),
-                          itemCount: admins.length,
-                          itemBuilder: (context, index) {
-                            final admin = admins[index];
-                            return Card(
-                              color: Color(0xFF0A0E21),
-                              margin: EdgeInsets.symmetric(vertical: 4),
-                              child: ListTile(
-                                title: Text(admin['name'],
-                                    style:
-                                    GoogleFonts.poppins(color: Colors.white)),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: onClose ?? () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('admins')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                        ),
+                      );
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Text('No admins found',
+                            style: GoogleFonts.poppins(color: Colors.white)),
+                      );
+                    }
+
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: snapshot.data!.docs.length,
+                      itemBuilder: (context, index) {
+                        final admin = snapshot.data!.docs[index];
+                        final role = admin['task'] ?? 'No role assigned';
+
+                        // Define role colors
+                        final roleColor = _getRoleColor(role);
+
+                        return Card(
+                          margin: EdgeInsets.symmetric(vertical: 4),
+                          color: Color(0xFF2D2D2D), // Darker card
+                          child: ListTile(
+                            title: Text(admin['name'],
+                                style: GoogleFonts.poppins(color: Colors.white)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(admin['email'],
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.grey[400])),
+                                SizedBox(height: 4),
+                                Row(
                                   children: [
-                                    Text(admin['email'],
-                                        style: GoogleFonts.poppins(
-                                            color: Colors.white70)),
-                                    SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Text('Task: ',
-                                            style: GoogleFonts.poppins(
-                                                color: Colors.white70)),
-                                        DropdownButton<String>(
-                                          value: admin['task'],
-                                          dropdownColor: Color(0xFF1D1E33),
-                                          style: GoogleFonts.poppins(
-                                              color: Colors.white),
-                                          items: [
-                                            'Administrator',
-                                            'Inventory Manager',
-                                            'Cashier',
-                                            'Exit Tech' // Added missing comma here
-                                          ].map((String value) {
-                                            return DropdownMenuItem<String>(
-                                              value: value,
-                                              child: Text(value),
-                                            );
-                                          }).toList(),
-                                          onChanged: (String? newValue) {
-                                            if (newValue != null) {
-                                              onTaskUpdated(admin.id, newValue);
-                                            }
-                                          },
-                                        ),
-                                      ],
+                                    Text('Role: ',
+                                        style: GoogleFonts.poppins(color: Colors.grey[400])),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: roleColor.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: roleColor),
+                                      ),
+                                      child: DropdownButton<String>(
+                                        value: role,
+                                        dropdownColor: Color(0xFF2D2D2D), // Dark dropdown
+                                        style: GoogleFonts.poppins(color: Colors.white),
+                                        underline: SizedBox(), // Remove default underline
+                                        items: [
+                                          'Administrator',
+                                          'Inventory Manager',
+                                          'Cashier',
+                                          'Exit Tech'
+                                        ].map((String value) {
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Text(
+                                              value,
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (String? newValue) {
+                                          if (newValue != null) {
+                                            onTaskUpdated(admin.id, newValue);
+                                          }
+                                        },
+                                      ),
                                     ),
                                   ],
                                 ),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) {
-                                        return AlertDialog(
-                                          backgroundColor: Color(0xFF1D1E33),
-                                          title: Text('Delete Admin',
-                                              style: GoogleFonts.poppins(
-                                                  color: Colors.white)),
-                                          content: Text(
-                                              'Are you sure you want to delete this admin?',
-                                              style: GoogleFonts.poppins(
-                                                  color: Colors.white)),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(context).pop(),
-                                              child: Text('Cancel',
-                                                  style: GoogleFonts.poppins(
-                                                      color: Colors.white)),
-                                            ),
-                                            TextButton(
-                                              onPressed: () {
-                                                Navigator.of(context).pop();
-                                                onAdminSelected(admin.id);
-                                              },
-                                              child: Text('Delete',
-                                                  style: GoogleFonts.poppins(
-                                                      color: Colors.red)),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          },
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red[400]),
+                              onPressed: () => _showDeleteDialog(
+                                  context, admin.id, admin['name']),
+                            ),
+                          ),
                         );
                       },
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -1309,122 +1376,184 @@ class AdminListPage extends StatelessWidget {
       ),
     );
   }
+
+  Color _getRoleColor(String role) {
+    switch (role) {
+      case 'Administrator':
+        return Colors.blueAccent;
+      case 'Inventory Manager':
+        return Colors.green;
+      case 'Cashier':
+        return Colors.orange;
+      case 'Exit Tech':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  void _showDeleteDialog(BuildContext context, String adminId, String name) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Color(0xFF2D2D2D),
+          title: Text('Delete Admin', style: GoogleFonts.poppins(color: Colors.white)),
+          content: Text('Delete $name? This action cannot be undone.',
+              style: GoogleFonts.poppins(color: Colors.white)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel', style: GoogleFonts.poppins(color: Colors.blueAccent)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onAdminSelected(adminId);
+              },
+              child: Text('Delete', style: GoogleFonts.poppins(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-// User Inquiries Page
 class UserInquiriesPage extends StatelessWidget {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Function(Map<String, dynamic>) onInquirySelected;
-  final Function() onBackPressed; // Add this callback for back navigation
+  final VoidCallback onBackPressed;
 
   UserInquiriesPage({
     required this.onInquirySelected,
-    required this.onBackPressed, // Pass the callback
+    required this.onBackPressed,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: Color(0xFF121212), // Dark background
       appBar: AppBar(
-        title: Text('User Inquiries',
-            style: GoogleFonts.poppins(color: Colors.white)),
-        backgroundColor: Color(0xFF0A0E21),
-        elevation: 0,
+        title: Text('User Inquiries', style: GoogleFonts.poppins()),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: onBackPressed, // Use the callback for back navigation
+          icon: Icon(Icons.arrow_back),
+          onPressed: onBackPressed,
         ),
+        backgroundColor: Color(0xFF1E1E1E),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          elevation: 4,
-          color: Color(0xFF1D1E33),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Text(
-                  'User Inquiries',
-                  style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-                SizedBox(height: 16),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _firestore
-                        .collection('feedback')
-                        .orderBy('timestamp', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return Center(
-                            child: Text('No inquiries found',
-                                style:
-                                    GoogleFonts.poppins(color: Colors.white)));
-                      }
-                      final inquiries = snapshot.data!.docs;
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: inquiries.length,
-                        itemBuilder: (context, index) {
-                          final inquiry = inquiries[index];
-                          final Map<String, dynamic>? inquiryData =
-                              inquiry.data() as Map<String, dynamic>?;
-                          final bool isResponded =
-                              inquiryData?.containsKey('response') ?? false;
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('feedback')
+            .orderBy('timestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+              ),
+            );
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Text('No inquiries found',
+                  style: GoogleFonts.poppins(color: Colors.white)),
+            );
+          }
 
-                          return FutureBuilder<DocumentSnapshot>(
-                            future: _firestore
-                                .collection('customers')
-                                .doc(inquiry['userId'])
-                                .get(),
-                            builder: (context, userSnapshot) {
-                              final userName = userSnapshot.hasData &&
-                                      userSnapshot.data!.exists
-                                  ? userSnapshot.data!['name']
-                                  : 'Deleted account';
+          return ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final inquiry = snapshot.data!.docs[index];
+              final inquiryData = inquiry.data() as Map<String, dynamic>;
+              final isResponded = inquiryData['isResponded'] ?? false;
+              final hasResponse = inquiryData.containsKey('response');
 
-                              return ListTile(
-                                leading: isResponded
-                                    ? null
-                                    : Icon(Icons.circle,
-                                        color: Colors.red, size: 12),
-                                title: Text(userName,
-                                    style: GoogleFonts.poppins(
-                                        color: Colors.white)),
-                                subtitle: Text(inquiry['title'],
-                                    style: GoogleFonts.poppins(
-                                        color: Colors.white70)),
-                                onTap: () {
-                                  onInquirySelected({
-                                    'id': inquiry.id,
-                                    'userId': inquiry['userId'],
-                                    'userName': userName,
-                                    'description': inquiry['description'],
-                                    'isResponded': isResponded,
-                                  });
-                                },
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('customers')
+                    .doc(inquiry['userId'])
+                    .get(),
+                builder: (context, userSnapshot) {
+                  final userName =
+                  userSnapshot.hasData && userSnapshot.data!.exists
+                      ? userSnapshot.data!['name']
+                      : 'Deleted account';
+
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 12),
+                    color: Color(0xFF1E1E1E),
+                    child: ListTile(
+                      leading: Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        child: !isResponded && !hasResponse
+                            ? Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withOpacity(0.5),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        )
+                            : Icon(Icons.check_circle, color: Colors.green),
+                      ),
+                      title: Text(
+                        userName,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            inquiryData['title'] ?? 'No title',
+                            style: GoogleFonts.poppins(color: Colors.grey[400]),
+                          ),
+                          if (isResponded || hasResponse)
+                            Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Responded',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        color: Colors.grey[600],
+                      ),
+                      onTap: () => onInquirySelected({
+                        'id': inquiry.id,
+                        'userId': inquiry['userId'],
+                        'userName': userName,
+                        'description': inquiryData['description'] ?? '',
+                        'isResponded': isResponded || hasResponse,
+                      }),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -1437,7 +1566,7 @@ class ConversationPage extends StatefulWidget {
   final String description;
   final bool isResponded;
   final String adminName;
-  final Function() onBackPressed; // Add this callback for back navigation
+  final Function() onBackPressed;
 
   ConversationPage({
     required this.inquiryId,
@@ -1446,7 +1575,7 @@ class ConversationPage extends StatefulWidget {
     required this.description,
     required this.isResponded,
     required this.adminName,
-    required this.onBackPressed, // Pass the callback
+    required this.onBackPressed,
   });
 
   @override
@@ -1454,8 +1583,128 @@ class ConversationPage extends StatefulWidget {
 }
 
 class _ConversationPageState extends State<ConversationPage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _responseController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.userName, style: GoogleFonts.poppins()),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: widget.onBackPressed,
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // User's message
+                  Card(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.userName,
+                              style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold)),
+                          SizedBox(height: 8),
+                          Text(widget.description,
+                              style: GoogleFonts.poppins()),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 16),
+
+                  // Admin responses
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('feedback')
+                        .doc(widget.inquiryId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || !snapshot.data!.exists) {
+                        return SizedBox();
+                      }
+
+                      final data =
+                          snapshot.data!.data() as Map<String, dynamic>;
+                      if (!data.containsKey('response')) {
+                        return SizedBox();
+                      }
+
+                      final response = data['response'];
+                      final responseTime =
+                          (data['responseTime'] as Timestamp).toDate();
+
+                      return Card(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.adminName,
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(response, style: GoogleFonts.poppins()),
+                              SizedBox(height: 8),
+                              Text(
+                                DateFormat('MMM d, y h:mm a')
+                                    .format(responseTime),
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Response input
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _responseController,
+                    decoration: InputDecoration(
+                      hintText: 'Type your response...',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                    minLines: 1,
+                  ),
+                ),
+                SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.send),
+                  onPressed: _submitResponse,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _submitResponse() async {
     if (_responseController.text.isEmpty) {
@@ -1465,152 +1714,22 @@ class _ConversationPageState extends State<ConversationPage> {
     }
 
     try {
-      await _firestore.collection('feedback').doc(widget.inquiryId).update({
+      await FirebaseFirestore.instance
+          .collection('feedback')
+          .doc(widget.inquiryId)
+          .update({
         'response': _responseController.text,
         'respondedBy': widget.adminName,
         'responseTime': DateTime.now(),
-        'isNewResponse': true,
+        'isResponded': true,
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Response submitted successfully!')));
 
-      // Call the callback to navigate back to UserInquiriesPage
-      widget.onBackPressed();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Response submitted!')));
+      _responseController.clear();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting response: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.userName,
-            style: GoogleFonts.poppins(color: Colors.white)),
-        backgroundColor: Color(0xFF0A0E21),
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed:
-              widget.onBackPressed, // Use the callback for back navigation
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      padding: EdgeInsets.all(12),
-                      margin: EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        widget.description,
-                        style: GoogleFonts.poppins(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  if (widget.isResponded)
-                    StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('feedback')
-                          .doc(widget.inquiryId)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                        if (!snapshot.hasData || !snapshot.data!.exists) {
-                          return SizedBox
-                              .shrink(); // Hide if no response exists
-                        }
-
-                        final response =
-                            snapshot.data!['response'] ?? 'No response yet';
-                        final respondedBy =
-                            snapshot.data!['respondedBy'] ?? 'Admin';
-                        final responseTime =
-                            (snapshot.data!['responseTime'] as Timestamp)
-                                .toDate();
-
-                        return Align(
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            padding: EdgeInsets.all(12),
-                            margin: EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[800],
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  respondedBy,
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 12, color: Colors.white70),
-                                ),
-                                Text(
-                                  response,
-                                  style:
-                                      GoogleFonts.poppins(color: Colors.white),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  DateFormat('jm')
-                                      .format(responseTime), // Format time
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 10, color: Colors.white70),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _responseController,
-                    style: GoogleFonts.poppins(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Type your response...',
-                      hintStyle: GoogleFonts.poppins(color: Colors.white70),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _submitResponse,
-                  child: Text('Send'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF0A0E21),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

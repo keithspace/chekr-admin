@@ -16,6 +16,7 @@ import 'package:flutter_web_browser/flutter_web_browser.dart'
     if (dart.library.html) 'dart:html' as html;
 import 'package:web_project/panel.dart';
 import 'package:web_project/reg.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ReportsPage extends StatefulWidget {
   @override
@@ -36,7 +37,8 @@ class _ReportsPageState extends State<ReportsPage> {
 
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
-    _inactivityTimer = Timer(const Duration(minutes: 10), _logoutDueToInactivity);
+    _inactivityTimer =
+        Timer(const Duration(minutes: 10), _logoutDueToInactivity);
   }
 
   void _logoutDueToInactivity() {
@@ -44,7 +46,7 @@ class _ReportsPageState extends State<ReportsPage> {
       prefs.remove('adminId');
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => AdminLoginPage()),
-            (Route<dynamic> route) => false,
+        (Route<dynamic> route) => false,
       );
     });
   }
@@ -92,7 +94,6 @@ class _ReportsPageState extends State<ReportsPage> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -109,7 +110,7 @@ class _ReportsPageState extends State<ReportsPage> {
     if (_selectedReport != null) {
       if (_selectedReport is CustomerReport) {
         pageTitle = 'Customer Activity Report';
-      } else if (_selectedReport is SalesReport) {
+      } else if (_selectedReport is OrderReport) {
         pageTitle = 'Sales Report';
       } else if (_selectedReport is ProductReport) {
         pageTitle = 'Product Report';
@@ -213,7 +214,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                 if (!mounted) return;
                                 setState(() {
                                   _selectedReport = index == 0
-                                      ? SalesReport(adminInfo: adminInfo)
+                                      ? OrderReport(adminInfo: adminInfo)
                                       : index == 1
                                           ? CustomerReport(adminInfo: adminInfo)
                                           : ProductReport(adminInfo: adminInfo);
@@ -298,116 +299,736 @@ class ReportButton extends StatelessWidget {
   }
 }
 
-class SalesReport extends StatefulWidget {
+class OrderReport extends StatefulWidget {
   final Map<String, dynamic>? adminInfo;
 
-  const SalesReport({Key? key, required this.adminInfo}) : super(key: key);
+  const OrderReport({Key? key, required this.adminInfo}) : super(key: key);
 
   @override
-  _SalesReportState createState() => _SalesReportState();
+  _OrderReportState createState() => _OrderReportState();
 }
 
-class _SalesReportState extends State<SalesReport> {
-  String selectedPeriod = 'All Time';
-  late Future<List<Order>> salesDataFuture;
+class _OrderReportState extends State<OrderReport> {
   String searchQuery = '';
-  final ScrollController _verticalController = ScrollController();
-  final ScrollController _horizontalController = ScrollController();
+  String selectedTimeFilter = 'All Time';
+  String selectedPaymentFilter = 'All';
+  DateTimeRange? selectedDateRange;
+  bool _isGeneratingReport = false;
 
-  @override
-  void initState() {
-    super.initState();
-    salesDataFuture = fetchSalesData();
+  // Payment mode image URLs
+  final String mpesaImageUrl =
+      'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/payment_modes/mpesalogo.png';
+  final String paypalImageUrl =
+      'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/payment_modes/paypal.png';
+  final String cardImageUrl =
+      'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/payment_modes/card1.png';
+
+  // Filter options
+  final List<String> timeFilters = [
+    'All Time',
+    'Past 24 Hours',
+    'Past Week',
+    'Past Month',
+    'Custom Range'
+  ];
+  final List<String> paymentFilters = ['All', 'M-PESA', 'PayPal', 'Card'];
+
+  String _truncateTransactionId(String id) {
+    if (id.length <= 10) return id;
+    return '${id.substring(0, 5)}...${id.substring(id.length - 5)}';
   }
 
-  Future<List<Order>> fetchSalesData() async {
+  Future<void> _selectDateRange(BuildContext context) async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      initialDateRange: selectedDateRange ??
+          DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 30)),
+            end: DateTime.now(),
+          ),
+    );
+
+    if (picked != null) {
+      setState(() {
+        selectedDateRange = picked;
+        selectedTimeFilter = 'Custom Range';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0A0E21), Color(0xFF1D1E33)],
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            // Header Section
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sales Report',
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'View detailed sales information. Filter by time period, payment method or search by transaction code.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      color: Colors.grey[300],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Search and Filter Controls
+            _buildFilterControls(),
+
+            // Date range display if custom range is selected
+            if (selectedTimeFilter == 'Custom Range' &&
+                selectedDateRange != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${DateFormat('dd MMM yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd MMM yyyy').format(selectedDateRange!.end)}',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close,
+                          color: Colors.white, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          selectedDateRange = null;
+                          selectedTimeFilter = 'All Time';
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+            // Orders List
+            Expanded(
+              child: Container(
+                color: const Color(0xFF0A0E21),
+                child: _buildOrdersList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterControls() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 768;
+
+          if (isMobile) {
+            return Column(
+              children: [
+                // Search and Time Filter
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSearchField(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildTimeFilterDropdown(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Payment Filter and Download Button
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildPaymentFilterDropdown(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildDownloadButton(compact: true),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          } else {
+            return Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: _buildSearchField(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _buildTimeFilterDropdown(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _buildPaymentFilterDropdown(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _buildDownloadButton(),
+                ),
+              ],
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      decoration: InputDecoration(
+        labelText: 'Search Transactions',
+        labelStyle: GoogleFonts.poppins(color: Colors.grey[300]),
+        prefixIcon: Icon(Icons.search, color: Colors.grey[300]),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        filled: true,
+        fillColor: Colors.grey[800],
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      ),
+      style: GoogleFonts.poppins(color: Colors.white),
+      onChanged: (value) => setState(() => searchQuery = value),
+    );
+  }
+
+  Widget _buildTimeFilterDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[800],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[700]!),
+      ),
+      child: DropdownButton<String>(
+        value: selectedTimeFilter,
+        onChanged: (String? newValue) {
+          if (newValue == 'Custom Range') {
+            _selectDateRange(context);
+          } else {
+            setState(() {
+              selectedTimeFilter = newValue!;
+              selectedDateRange = null;
+            });
+          }
+        },
+        items: timeFilters.map((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Text(
+              value,
+              style: GoogleFonts.poppins(color: Colors.white),
+            ),
+          );
+        }).toList(),
+        underline: const SizedBox(),
+        icon: Icon(Icons.arrow_drop_down, color: Colors.grey[300]),
+        isExpanded: true,
+        hint: Text('Time Period',
+            style: GoogleFonts.poppins(color: Colors.white)),
+      ),
+    );
+  }
+
+  Widget _buildPaymentFilterDropdown() {
+    return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey[700]!),
+        ),
+        child: DropdownButton<String>(
+          value: selectedPaymentFilter,
+          onChanged: (String? newValue) =>
+              setState(() => selectedPaymentFilter = newValue!),
+          items: paymentFilters.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(
+                value == 'All' ? 'All Payments' : value,
+                style: GoogleFonts.poppins(color: Colors.white),
+              ),
+            );
+          }).toList(),
+          underline: const SizedBox(),
+          icon: Icon(Icons.arrow_drop_down, color: Colors.grey[300]),
+          isExpanded: true,
+          hint: Text('Payment Method',
+              style: GoogleFonts.poppins(color: Colors.white)),
+        ));
+  }
+
+  Widget _buildDownloadButton({bool compact = false}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ElevatedButton(
+          onPressed: _isGeneratingReport ? null : _downloadOrdersAsPdf,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green[900],
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: _isGeneratingReport
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  compact ? 'Download' : 'Download Report',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+        ),
+        if (_isGeneratingReport)
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              'Generating report...',
+              style: GoogleFonts.poppins(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildOrdersList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _getFilteredOrders(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error loading orders',
+              style: GoogleFonts.poppins(color: Colors.white),
+            ),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Text(
+              'No orders found',
+              style: GoogleFonts.poppins(color: Colors.white),
+            ),
+          );
+        }
+
+        var orders = snapshot.data!.docs
+            .map((doc) => doc.data() as Map<String, dynamic>)
+            .where((order) =>
+                order['transactionId']
+                    .toString()
+                    .toLowerCase()
+                    .contains(searchQuery.toLowerCase()) &&
+                (selectedPaymentFilter == 'All' ||
+                    order['paymentmode'].toString().toLowerCase() ==
+                        selectedPaymentFilter.toLowerCase()))
+            .toList();
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: [
+                DataColumn(
+                    label: Text('#',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Transaction ID',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Payment Method',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Customer',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Phone',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Amount',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Date',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                DataColumn(
+                    label: Text('Time',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+              ],
+              rows: orders.asMap().entries.map((entry) {
+                final index = entry.key;
+                final order = entry.value;
+                final date = order['timestamp'].toDate();
+                return DataRow(
+                  cells: [
+                    DataCell(Text((index + 1).toString(),
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                    DataCell(
+                      Text(
+                        _truncateTransactionId(
+                            order['transactionId'].toString()),
+                        style: GoogleFonts.poppins(color: Colors.white),
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        children: [
+                          if (order['paymentmode']
+                              .toString()
+                              .toLowerCase()
+                              .contains('m-pesa'))
+                            CachedNetworkImage(
+                              imageUrl: mpesaImageUrl,
+                              width: 24,
+                              height: 24,
+                              placeholder: (context, url) =>
+                                  const CircularProgressIndicator(),
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.error),
+                            ),
+                          if (order['paymentmode']
+                              .toString()
+                              .toLowerCase()
+                              .contains('paypal'))
+                            CachedNetworkImage(
+                              imageUrl: paypalImageUrl,
+                              width: 24,
+                              height: 24,
+                              placeholder: (context, url) =>
+                                  const CircularProgressIndicator(),
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.error),
+                            ),
+                          if (order['paymentmode']
+                              .toString()
+                              .toLowerCase()
+                              .contains('card'))
+                            CachedNetworkImage(
+                              imageUrl: cardImageUrl,
+                              width: 24,
+                              height: 24,
+                              placeholder: (context, url) =>
+                                  const CircularProgressIndicator(),
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.error),
+                            ),
+                          const SizedBox(width: 8),
+                          Text(
+                            order['paymentmode'].toString(),
+                            style: GoogleFonts.poppins(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(FutureBuilder<String?>(
+                      future: _getCustomerName(order['userId']),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Text('Loading...',
+                              style: GoogleFonts.poppins(color: Colors.white));
+                        }
+                        return Text(
+                          snapshot.data ?? 'Deleted Account',
+                          style: GoogleFonts.poppins(color: Colors.white),
+                        );
+                      },
+                    )),
+                    DataCell(Text(
+                        _formatPhoneNumber(order['phoneNumber'].toString()),
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                    DataCell(Text('Ksh ${order['amount'].toStringAsFixed(2)}',
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                    DataCell(Text(DateFormat('dd/MM/yyyy').format(date),
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                    DataCell(Text(DateFormat('HH:mm').format(date),
+                        style: GoogleFonts.poppins(color: Colors.white))),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Stream<QuerySnapshot> _getFilteredOrders() {
     DateTime now = DateTime.now();
     DateTime startDate;
+    DateTime? endDate;
 
-    switch (selectedPeriod) {
-      case 'Daily':
-        startDate = DateTime(now.year, now.month, now.day);
+    switch (selectedTimeFilter) {
+      case 'Past 24 Hours':
+        startDate = now.subtract(const Duration(days: 1));
         break;
-      case 'Weekly':
-        startDate = now.subtract(Duration(days: 6));
+      case 'Past Week':
+        startDate = now.subtract(const Duration(days: 7));
         break;
-      case 'Monthly':
-        startDate = now.subtract(Duration(days: 29));
+      case 'Past Month':
+        startDate = now.subtract(const Duration(days: 30));
+        break;
+      case 'Custom Range':
+        if (selectedDateRange != null) {
+          startDate = selectedDateRange!.start;
+          endDate = selectedDateRange!.end;
+        } else {
+          startDate = DateTime(2000);
+        }
         break;
       default:
         startDate = DateTime(2000);
     }
 
-    QuerySnapshot salesSnapshot = await FirebaseFirestore.instance
-        .collection('orders')
-        .where('timestamp', isGreaterThanOrEqualTo: startDate)
-        .orderBy('timestamp', descending: true)
-        .get();
-
-    return salesSnapshot.docs.map((doc) {
-      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      return Order(
-        transactionId: doc.id,
-        amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
-        paymentMode: data['paymentmode']?.toString() ?? 'Unknown',
-        timestamp: (data['timestamp'] as Timestamp).toDate(),
-      );
-    }).toList();
+    if (endDate != null) {
+      return FirebaseFirestore.instance
+          .collection('orders')
+          .where('timestamp', isGreaterThan: startDate)
+          .where('timestamp',
+              isLessThan:
+                  endDate.add(const Duration(days: 1))) // Include the end date
+          .orderBy('timestamp', descending: true)
+          .snapshots();
+    } else {
+      return FirebaseFirestore.instance
+          .collection('orders')
+          .where('timestamp', isGreaterThan: startDate)
+          .orderBy('timestamp', descending: true)
+          .snapshots();
+    }
   }
 
-  Future<void> _downloadReportAsPdf() async {
-    final pdf = pw.Document();
-    final salesData = await salesDataFuture;
-    final now = DateTime.now();
-    final formattedDate = DateFormat('dd/MM/yyyy').format(now);
-    final formattedTime = DateFormat('HH:mm').format(now);
-
+  Future<void> _downloadOrdersAsPdf() async {
+    setState(() {
+      _isGeneratingReport = true;
+    });
     try {
-      final imageBytes = await _networkImageToByteArray(
-        'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/logo/logo2.png',
-      );
+      // Get admin ID from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final adminId = prefs.getString('adminId');
 
+      String adminName = widget.adminInfo?['name'] ?? 'Administrator';
+      String adminRole = widget.adminInfo?['role'] ?? 'System Admin';
+
+      // Get all the orders data
+      final ordersSnapshot = await _getFilteredOrders().first;
+
+      if (ordersSnapshot.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('No orders found for the selected filters')),
+        );
+        return;
+      }
+
+      // Load organization logo
+      final logoUrl =
+          'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/logo/logo2.png';
+      final response = await http.get(Uri.parse(logoUrl));
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load logo: ${response.statusCode}');
+      }
+
+      final logoBytes = response.bodyBytes;
+
+      // Prepare all data asynchronously and calculate total revenue
+      final List<Map<String, dynamic>> preparedData = [];
+      double totalRevenue = 0;
+
+      for (final doc in ordersSnapshot.docs) {
+        final order = doc.data() as Map<String, dynamic>;
+        final date = order['timestamp'].toDate();
+        final customerName =
+            await _getCustomerName(order['userId']) ?? 'Deleted Account';
+        final amount = order['amount'] as double;
+        totalRevenue += amount;
+
+        preparedData.add({
+          'transactionId':
+              _truncateTransactionId(order['transactionId'].toString()),
+          'paymentMethod': order['paymentmode'].toString(),
+          'customerName': customerName,
+          'phone': _formatPhoneNumber(order['phoneNumber'].toString()),
+          'amount': 'Ksh ${amount.toStringAsFixed(2)}',
+          'date': DateFormat('dd/MM/yyyy').format(date),
+          'time': DateFormat('HH:mm').format(date),
+        });
+      }
+
+      // Generate time period text with date range if applicable
+      String timePeriodText = selectedTimeFilter;
+      if (selectedTimeFilter == 'Custom Range' && selectedDateRange != null) {
+        timePeriodText =
+            'Custom Range (${DateFormat('dd MMM yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd MMM yyyy').format(selectedDateRange!.end)})';
+      } else if (selectedTimeFilter == 'Past Week') {
+        final startDate = DateTime.now().subtract(const Duration(days: 7));
+        timePeriodText =
+            'Past Week (${DateFormat('dd MMM yyyy').format(startDate)} - ${DateFormat('dd MMM yyyy').format(DateTime.now())})';
+      } else if (selectedTimeFilter == 'Past Month') {
+        final startDate = DateTime.now().subtract(const Duration(days: 30));
+        timePeriodText =
+            'Past Month (${DateFormat('dd MMM yyyy').format(startDate)} - ${DateFormat('dd MMM yyyy').format(DateTime.now())})';
+      } else if (selectedTimeFilter == 'Past 24 Hours') {
+        final startDate = DateTime.now().subtract(const Duration(days: 1));
+        timePeriodText =
+            'Past 24 Hours (${DateFormat('dd MMM yyyy, HH:mm').format(startDate)} - ${DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())})';
+      }
+
+      // Build PDF
+      final pdf = pw.Document();
       pdf.addPage(
         pw.Page(
+          pageFormat: PdfPageFormat.a4,
           build: (pw.Context context) {
+            final now = DateTime.now();
+            final day = now.day;
+            String suffix = 'th';
+            if (day % 100 < 11 || day % 100 > 13) {
+              switch (day % 10) {
+                case 1:
+                  suffix = 'st';
+                  break;
+                case 2:
+                  suffix = 'nd';
+                  break;
+                case 3:
+                  suffix = 'rd';
+                  break;
+              }
+            }
+            final formattedDate =
+                "${day}$suffix ${DateFormat('MMMM y, h.mma').format(now)}";
+
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Center(
-                  child: pw.Image(
-                    pw.MemoryImage(imageBytes),
-                    width: 150,
-                    height: 50,
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-                pw.Text(
-                  'Sales Report - $selectedPeriod',
-                  style: pw.TextStyle(
-                      fontSize: 18, fontWeight: pw.FontWeight.bold),
-                  textAlign: pw.TextAlign.center,
+                pw.Row(
+                  children: [
+                    pw.Image(
+                      pw.MemoryImage(logoBytes),
+                      height: 60,
+                      width: 60,
+                    ),
+                    pw.SizedBox(width: 20),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'Order Report',
+                          style: pw.TextStyle(
+                            fontSize: 18,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.Text(
+                          'Time Period: $timePeriodText',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
+                        pw.Text(
+                          'Generated on: $formattedDate',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
                 pw.SizedBox(height: 10),
                 pw.Text(
-                  'Generated on: [$formattedDate][$formattedTime]',
-                  style: pw.TextStyle(fontSize: 12),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Text(
-                  'Generated by: ${widget.adminInfo?['name'] ?? 'N/A'} (${widget.adminInfo?['task'] ?? 'N/A'})',
-                  style: pw.TextStyle(fontSize: 12),
+                  'Generated by: $adminName ($adminRole)',
+                  style: const pw.TextStyle(fontSize: 10),
                 ),
                 pw.SizedBox(height: 20),
                 pw.Table.fromTextArray(
-                  headers: ['Date', 'Transaction ID', 'Amount', 'Payment Mode'],
-                  data: salesData.map((order) {
-                    return [
-                      DateFormat('dd MMM yyyy').format(order.timestamp),
-                      order.transactionId,
-                      'Ksh ${order.amount.toStringAsFixed(2)}',
-                      order.paymentMode,
-                    ];
-                  }).toList(),
+                  context: context,
+                  data: <List<String>>[
+                    <String>[
+                      '#',
+                      'Txn ID',
+                      'Method',
+                      'Customer',
+                      'Phone',
+                      'Amount',
+                      'Date',
+                      'Time'
+                    ],
+                    ...preparedData.asMap().entries.map(
+                          (entry) => [
+                            (entry.key + 1).toString(),
+                            entry.value['transactionId'],
+                            entry.value['paymentMethod'],
+                            entry.value['customerName'],
+                            entry.value['phone'],
+                            entry.value['amount'],
+                            entry.value['date'],
+                            entry.value['time'],
+                          ],
+                        ),
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Total Revenue: Ksh ${totalRevenue.toStringAsFixed(2)}',
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );
@@ -415,501 +1036,48 @@ class _SalesReportState extends State<SalesReport> {
         ),
       );
 
+      // Save and download PDF
       final Uint8List pdfBytes = await pdf.save();
-
       if (kIsWeb) {
         final blob = html.Blob([pdfBytes], 'application/pdf');
         final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', 'sales_report_$selectedPeriod.pdf')
+        html.AnchorElement(href: url)
+          ..setAttribute('download',
+              'Order_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf')
           ..click();
         html.Url.revokeObjectUrl(url);
       } else {
-        await Printing.layoutPdf(
-          onLayout: (PdfPageFormat format) async => pdfBytes,
-        );
+        await Printing.layoutPdf(onLayout: (_) => pdfBytes);
       }
     } catch (e) {
-      print('Error generating PDF: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating PDF: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingReport = false;
+        });
+      }
     }
   }
 
-  Future<Uint8List> _networkImageToByteArray(String imageUrl) async {
-    try {
-      if (kIsWeb) {
-        final response = await html.HttpRequest.request(
-          imageUrl,
-          method: 'GET',
-          responseType: 'arraybuffer',
-        );
-        final typedArray = response.response as dynamic;
-        final bytes = Uint8List.view(typedArray);
-        return bytes;
-      } else {
-        final response = await http.get(Uri.parse(imageUrl));
-        return response.bodyBytes;
-      }
-    } catch (e) {
-      print('Error loading image: $e');
-      return Uint8List(0);
+  Future<String?> _getCustomerName(String userId) async {
+    final customerDoc = await FirebaseFirestore.instance
+        .collection('customers')
+        .doc(userId)
+        .get();
+    if (customerDoc.exists) {
+      return customerDoc['name'];
     }
+    return null;
   }
 
-  @override
-  void dispose() {
-    _verticalController.dispose();
-    _horizontalController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 600;
-    final bool isTablet = screenWidth >= 600 && screenWidth < 900;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0A0E21),
-              Color(0xFF1D1E33),
-            ],
-          ),
-        ),
-        child: SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Color(0xFF1D1E33).withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        if (isMobile) _buildMobileControls(),
-                        if (isTablet) _buildTabletControls(),
-                        if (!isMobile && !isTablet) _buildDesktopControls(),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Color(0xFF1D1E33).withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: FutureBuilder<List<Order>>(
-                    future: salesDataFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      } else if (snapshot.hasError) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text('Error: ${snapshot.error}',
-                                style: TextStyle(color: Colors.white)),
-                          ),
-                        );
-                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text('No sales data available',
-                                style: TextStyle(color: Colors.white)),
-                          ),
-                        );
-                      }
-
-                      final filteredData = snapshot.data!.where((order) {
-                        return order.transactionId
-                            .toLowerCase()
-                            .contains(searchQuery.toLowerCase());
-                      }).toList();
-
-                      if (filteredData.isEmpty) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text('No matching transactions found',
-                                style: TextStyle(color: Colors.white)),
-                          ),
-                        );
-                      }
-
-                      return ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: MediaQuery.of(context).size.height * 0.6,
-                          ),
-                          child: Scrollbar(
-                            controller:
-                                _verticalController, // Add controller here
-                            thumbVisibility:
-                                true, // Makes scrollbar always visible
-                            child: SingleChildScrollView(
-                              controller:
-                                  _verticalController, // Match controller here
-                              physics: AlwaysScrollableScrollPhysics(),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Scrollbar(
-                                  controller:
-                                      _horizontalController, // Horizontal controller
-                                  thumbVisibility: true,
-                                  notificationPredicate: (notification) =>
-                                      notification.depth ==
-                                      1, // Only listen to inner scroll
-                                  child: SingleChildScrollView(
-                                    controller:
-                                        _horizontalController, // Match horizontal controller
-                                    scrollDirection: Axis.horizontal,
-                                    child: DataTable(
-                                      columnSpacing: 20,
-                                      horizontalMargin: 10,
-                                      decoration: BoxDecoration(
-                                        color: Colors.transparent,
-                                      ),
-                                      columns: [
-                                        DataColumn(
-                                          label: ConstrainedBox(
-                                            constraints:
-                                                BoxConstraints(minWidth: 100),
-                                            child: Text('Date',
-                                                style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                        ),
-                                        DataColumn(
-                                          label: ConstrainedBox(
-                                            constraints:
-                                                BoxConstraints(minWidth: 150),
-                                            child: Text('Transaction ID',
-                                                style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                        ),
-                                        DataColumn(
-                                          label: ConstrainedBox(
-                                            constraints:
-                                                BoxConstraints(minWidth: 100),
-                                            child: Text('Amount',
-                                                style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                        ),
-                                        DataColumn(
-                                          label: ConstrainedBox(
-                                            constraints:
-                                                BoxConstraints(minWidth: 120),
-                                            child: Text('Payment Mode',
-                                                style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                        ),
-                                      ],
-                                      rows: filteredData.map((order) {
-                                        return DataRow(
-                                          cells: [
-                                            DataCell(Text(
-                                              DateFormat('dd MMM yyyy')
-                                                  .format(order.timestamp),
-                                              style: TextStyle(
-                                                  color: Colors.white),
-                                            )),
-                                            DataCell(ConstrainedBox(
-                                              constraints:
-                                                  BoxConstraints(maxWidth: 200),
-                                              child: Text(
-                                                order.transactionId,
-                                                style: TextStyle(
-                                                    color: Colors.white),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            )),
-                                            DataCell(Text(
-                                              'Ksh ${order.amount.toStringAsFixed(2)}',
-                                              style: TextStyle(
-                                                  color: Colors.white),
-                                            )),
-                                            DataCell(Text(
-                                              order.paymentMode,
-                                              style: TextStyle(
-                                                  color: Colors.white),
-                                            )),
-                                          ],
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ));
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileControls() {
-    return Column(
-      children: [
-        TextField(
-          decoration: InputDecoration(
-            labelText: 'Search',
-            labelStyle: TextStyle(color: Colors.white70),
-            prefixIcon: Icon(Icons.search, color: Colors.white70),
-            border: OutlineInputBorder(),
-            enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.white54),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.blue),
-            ),
-          ),
-          style: TextStyle(color: Colors.white),
-          onChanged: (value) {
-            setState(() {
-              searchQuery = value;
-              salesDataFuture = fetchSalesData();
-            });
-          },
-        ),
-        SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: selectedPeriod,
-                items: ['All Time', 'Daily', 'Weekly', 'Monthly']
-                    .map((String value) => DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value,
-                              style: GoogleFonts.poppins(color: Colors.white)),
-                        ))
-                    .toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() {
-                      selectedPeriod = newValue;
-                    });
-                    salesDataFuture = fetchSalesData();
-                  }
-                },
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                ),
-                style: GoogleFonts.poppins(color: Colors.white),
-                dropdownColor: Color(0xFF1D1E33),
-              ),
-            ),
-            SizedBox(width: 10),
-            IconButton(
-              onPressed: _downloadReportAsPdf,
-              icon: Icon(Icons.download, color: Colors.white),
-              style: IconButton.styleFrom(
-                backgroundColor: Color(0xFF0A0E21),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabletControls() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                decoration: InputDecoration(
-                  labelText: 'Search',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  prefixIcon: Icon(Icons.search, color: Colors.white70),
-                  border: OutlineInputBorder(),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white54),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                ),
-                style: TextStyle(color: Colors.white),
-                onChanged: (value) {
-                  setState(() {
-                    searchQuery = value;
-                    salesDataFuture = fetchSalesData();
-                  });
-                },
-              ),
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: selectedPeriod,
-                items: ['All Time', 'Daily', 'Weekly', 'Monthly']
-                    .map((String value) => DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value,
-                              style: GoogleFonts.poppins(color: Colors.white)),
-                        ))
-                    .toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() {
-                      selectedPeriod = newValue;
-                    });
-                    salesDataFuture = fetchSalesData();
-                  }
-                },
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                ),
-                style: GoogleFonts.poppins(color: Colors.white),
-                dropdownColor: Color(0xFF1D1E33),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _downloadReportAsPdf,
-                icon: Icon(Icons.download),
-                label: Text('Download', style: GoogleFonts.poppins()),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF0A0E21),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  minimumSize: Size(0, 48),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDesktopControls() {
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: TextField(
-            decoration: InputDecoration(
-              labelText: 'Search by Transaction ID',
-              labelStyle: TextStyle(color: Colors.white70),
-              prefixIcon: Icon(Icons.search, color: Colors.white70),
-              border: OutlineInputBorder(),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.white54),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
-            ),
-            style: TextStyle(color: Colors.white),
-            onChanged: (value) {
-              setState(() {
-                searchQuery = value;
-                salesDataFuture = fetchSalesData();
-              });
-            },
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          flex: 2,
-          child: DropdownButtonFormField<String>(
-            value: selectedPeriod,
-            items: ['All Time', 'Daily', 'Weekly', 'Monthly']
-                .map((String value) => DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value,
-                          style: GoogleFonts.poppins(color: Colors.white)),
-                    ))
-                .toList(),
-            onChanged: (String? newValue) {
-              if (newValue != null) {
-                setState(() {
-                  selectedPeriod = newValue;
-                });
-                salesDataFuture = fetchSalesData();
-              }
-            },
-            decoration: InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            ),
-            style: GoogleFonts.poppins(color: Colors.white),
-            dropdownColor: Color(0xFF1D1E33),
-          ),
-        ),
-        SizedBox(width: 10),
-        ElevatedButton.icon(
-          onPressed: _downloadReportAsPdf,
-          icon: Icon(Icons.download),
-          label: Text('Download Report', style: GoogleFonts.poppins()),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFF0A0E21),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: Colors.white.withOpacity(0.2)),
-            ),
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
-        ),
-      ],
-    );
+  String _formatPhoneNumber(String phoneNumber) {
+    if (phoneNumber.length > 6) {
+      return '${phoneNumber.substring(0, 3)}XXX${phoneNumber.substring(phoneNumber.length - 3)}';
+    }
+    return phoneNumber;
   }
 }
 
@@ -1704,8 +1872,13 @@ class _ProductReportState extends State<ProductReport> {
   Map<String, List<Map<String, dynamic>>> productSalesDetails = {};
   bool isLoading = true;
   int _selectedViewIndex = 0;
-  final List<String> _viewOptions = ['Sold Items', 'Stock Levels', 'Out of Stock'];
+  final List<String> _viewOptions = [
+    'Sold Items',
+    'Stock Levels',
+    'Out of Stock'
+  ];
   final ScrollController _scrollController = ScrollController();
+  bool _showHelpSection = true;
 
   // Product details view variables
   Product? _selectedProduct;
@@ -1714,7 +1887,8 @@ class _ProductReportState extends State<ProductReport> {
   double _filteredSalesRevenue = 0.0;
   List<Map<String, dynamic>> _filteredSalesDetails = [];
 
-  List<Product> get outOfStockProducts => products.where((product) => product.quantity == 0).toList();
+  List<Product> get outOfStockProducts =>
+      products.where((product) => product.quantity == 0).toList();
 
   @override
   void initState() {
@@ -1749,7 +1923,8 @@ class _ProductReportState extends State<ProductReport> {
 
       for (var orderDoc in orderSnapshot.docs) {
         final orderData = orderDoc.data() as Map<String, dynamic>;
-        final orderDate = (orderData['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+        final orderDate =
+            (orderData['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
         final orderProducts = orderData['products'] ?? [];
 
         for (var orderProduct in orderProducts) {
@@ -1760,8 +1935,10 @@ class _ProductReportState extends State<ProductReport> {
           final price = (orderProduct['price'] as num?)?.toDouble() ?? 0.0;
           final revenue = quantity * price;
 
-          newProductSalesQuantity[productId] = (newProductSalesQuantity[productId] ?? 0) + quantity;
-          newProductSalesRevenue[productId] = (newProductSalesRevenue[productId] ?? 0.0) + revenue;
+          newProductSalesQuantity[productId] =
+              (newProductSalesQuantity[productId] ?? 0) + quantity;
+          newProductSalesRevenue[productId] =
+              (newProductSalesRevenue[productId] ?? 0.0) + revenue;
 
           if (!newProductSalesDetails.containsKey(productId)) {
             newProductSalesDetails[productId] = [];
@@ -1790,6 +1967,116 @@ class _ProductReportState extends State<ProductReport> {
     }
   }
 
+  Widget _buildUserGuidance() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1D1E33).withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'How to use this report',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => setState(() => _showHelpSection = false),
+                tooltip: 'Hide help',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_selectedViewIndex == 0) ...[
+            _buildGuidanceItem(
+              '1. View top selling products in the list',
+              Icons.list_alt,
+            ),
+            _buildGuidanceItem(
+              '2. Click the eye icon or product name to see detailed sales data',
+              Icons.remove_red_eye,
+            ),
+            _buildGuidanceItem(
+              '3. Filter by date range to analyze specific periods',
+              Icons.calendar_today,
+            ),
+            _buildGuidanceItem(
+              '4. Download reports for any view or time period',
+              Icons.download,
+            ),
+          ] else if (_selectedViewIndex == 1) ...[
+            _buildGuidanceItem(
+              '1. View current stock levels for all products',
+              Icons.inventory,
+            ),
+            _buildGuidanceItem(
+              '2. Identify low stock items (highlighted in orange)',
+              Icons.warning_amber,
+            ),
+            _buildGuidanceItem(
+              '3. Download the full stock report if needed',
+              Icons.download,
+            ),
+          ] else ...[
+            _buildGuidanceItem(
+              '1. View all out-of-stock products that need restocking',
+              Icons.error_outline,
+            ),
+            _buildGuidanceItem(
+              '2. Check when each product last had stock',
+              Icons.history,
+            ),
+            _buildGuidanceItem(
+              '3. Download the out-of-stock report for purchasing',
+              Icons.download,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuidanceItem(String text, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.blue, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> fetchProducts() async {
     if (!mounted) return;
 
@@ -1810,7 +2097,8 @@ class _ProductReportState extends State<ProductReport> {
           quantity: (data['quantity'] as num?)?.toInt() ?? 0,
           price: (data['price'] as num?)?.toDouble() ?? 0.0,
           status: data['status']?.toString() ?? 'unknown',
-          timeAdded: (data['timeAdded'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          timeAdded:
+              (data['timeAdded'] as Timestamp?)?.toDate() ?? DateTime.now(),
         );
       }).toList();
 
@@ -1860,8 +2148,10 @@ class _ProductReportState extends State<ProductReport> {
       return date.isAfter(dateRange.start) && date.isBefore(dateRange.end);
     }).toList();
 
-    final totalQuantity = filtered.fold(0, (sum, sale) => sum + (sale['quantity'] as int));
-    final totalRevenue = filtered.fold(0.0, (sum, sale) => sum + (sale['revenue'] as double));
+    final totalQuantity =
+        filtered.fold(0, (sum, sale) => sum + (sale['quantity'] as int));
+    final totalRevenue =
+        filtered.fold(0.0, (sum, sale) => sum + (sale['revenue'] as double));
 
     setState(() {
       _selectedDateRange = dateRange;
@@ -1906,104 +2196,139 @@ class _ProductReportState extends State<ProductReport> {
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Column(
-          children: [
+        body: CustomScrollView(
+          slivers: [
             // Header with view selection and download button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: SegmentedButton<int>(
-                      segments: _viewOptions.asMap().entries.map((entry) {
-                        return ButtonSegment<int>(
-                          value: entry.key,
-                          label: Text(entry.value),
-                          icon: Icon(
-                            entry.key == 0
-                                ? Icons.shopping_cart
-                                : entry.key == 1
-                                ? Icons.inventory
-                                : Icons.warning,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: SegmentedButton<int>(
+                        segments: _viewOptions.asMap().entries.map((entry) {
+                          return ButtonSegment<int>(
+                            value: entry.key,
+                            label: Text(entry.value),
+                            icon: Icon(
+                              entry.key == 0
+                                  ? Icons.shopping_cart
+                                  : entry.key == 1
+                                      ? Icons.inventory
+                                      : Icons.warning,
+                            ),
+                          );
+                        }).toList(),
+                        selected: {_selectedViewIndex},
+                        onSelectionChanged: (Set<int> newSelection) {
+                          setState(() {
+                            _selectedViewIndex = newSelection.first;
+                            _selectedProduct = null;
+                          });
+                          _scrollController.animateTo(
+                            0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                        },
+                        showSelectedIcon: false,
+                        style: ButtonStyle(
+                          backgroundColor:
+                              MaterialStateProperty.resolveWith<Color>(
+                            (Set<MaterialState> states) {
+                              if (states.contains(MaterialState.selected)) {
+                                return const Color(0xFF0A0E21).withOpacity(0.8);
+                              }
+                              return Colors.transparent;
+                            },
                           ),
-                        );
-                      }).toList(),
-                      selected: {_selectedViewIndex},
-                      onSelectionChanged: (Set<int> newSelection) {
-                        setState(() {
-                          _selectedViewIndex = newSelection.first;
-                          _selectedProduct = null;
-                        });
-                        _scrollController.animateTo(
-                          0,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut,
-                        );
-                      },
-                      showSelectedIcon: false,
-                      style: ButtonStyle(
-                        backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                              (Set<MaterialState> states) {
-                            if (states.contains(MaterialState.selected)) {
-                              return const Color(0xFF0A0E21).withOpacity(0.8);
-                            }
-                            return Colors.transparent;
-                          },
-                        ),
-                        foregroundColor: MaterialStateProperty.resolveWith<Color>(
-                              (Set<MaterialState> states) => Colors.white,
+                          foregroundColor:
+                              MaterialStateProperty.resolveWith<Color>(
+                            (Set<MaterialState> states) => Colors.white,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  isMobile
-                      ? IconButton(
-                    onPressed: isLoading ? null : () => _generateReport(),
-                    icon: const Icon(Icons.download),
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF0A0E21),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      ),
+                    const SizedBox(width: 16),
+                    Row(
+                      children: [
+                        if (!_showHelpSection)
+                          IconButton(
+                            onPressed: () =>
+                                setState(() => _showHelpSection = true),
+                            icon: const Icon(Icons.help_outline),
+                            tooltip: 'Show help',
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF0A0E21),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        const SizedBox(width: 8),
+                        isMobile
+                            ? IconButton(
+                                onPressed:
+                                    isLoading ? null : () => _generateReport(),
+                                icon: const Icon(Icons.download),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0A0E21),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(
+                                        color: Colors.white.withOpacity(0.2)),
+                                  ),
+                                ),
+                              )
+                            : ElevatedButton.icon(
+                                onPressed:
+                                    isLoading ? null : () => _generateReport(),
+                                icon: const Icon(Icons.download),
+                                label: Text('Download Report',
+                                    style: GoogleFonts.poppins()),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0A0E21),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(
+                                        color: Colors.white.withOpacity(0.2)),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                ),
+                              ),
+                      ],
                     ),
-                  )
-                      : ElevatedButton.icon(
-                    onPressed: isLoading ? null : () => _generateReport(),
-                    icon: const Icon(Icons.download),
-                    label: Text('Download Report', style: GoogleFonts.poppins()),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0A0E21),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
+            if (_showHelpSection)
+              SliverToBoxAdapter(
+                child: _buildUserGuidance(),
+              ),
+
             if (isLoading)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16.0),
-                child: CircularProgressIndicator(),
+              SliverToBoxAdapter(
+                child: const Padding(
+                  padding: EdgeInsets.only(bottom: 16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
               ),
 
             // Main content area
-            Expanded(
-              child: isLoading
-                  ? const SizedBox()
-                  : Padding(
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: _selectedProduct != null && _selectedViewIndex == 0
-                    ? _buildSplitView()
-                    : _buildSingleView(),
+                child: isLoading
+                    ? const SizedBox()
+                    : _selectedProduct != null && _selectedViewIndex == 0
+                        ? _buildSplitView()
+                        : _buildSingleView(),
               ),
             ),
           ],
@@ -2014,65 +2339,67 @@ class _ProductReportState extends State<ProductReport> {
 
   Widget _buildSingleView() {
     return Container(
+      constraints: const BoxConstraints(minHeight: 400),
       decoration: BoxDecoration(
         color: const Color(0xFF1D1E33).withOpacity(0.7),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: _buildCurrentView(),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: _buildCurrentView(),
       ),
     );
   }
 
   Widget _buildSplitView() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left side - Sold items list
-        Expanded(
-          flex: 2,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1D1E33).withOpacity(0.7),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: SingleChildScrollView(
-              controller: _scrollController,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 400),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left side - Sold items list
+          Expanded(
+            flex: 2,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1D1E33).withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: _buildSoldItemsView(showActions: false),
               ),
             ),
           ),
-        ),
 
-        const SizedBox(width: 16),
+          const SizedBox(width: 16),
 
-        // Right side - Product details
-        Expanded(
-          flex: 3,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1D1E33).withOpacity(0.7),
-              borderRadius: BorderRadius.circular(12),
+          // Right side - Product details
+          Expanded(
+            flex: 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1D1E33).withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: _buildProductDetailsView(),
             ),
-            child: _buildProductDetailsView(),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildCurrentView() {
     switch (_selectedViewIndex) {
-      case 0: return _buildSoldItemsView();
-      case 1: return _buildStockLevelView();
-      case 2: return _buildOutOfStockView();
-      default: return _buildStockLevelView();
+      case 0:
+        return _buildSoldItemsView();
+      case 1:
+        return _buildStockLevelView();
+      case 2:
+        return _buildOutOfStockView();
+      default:
+        return _buildStockLevelView();
     }
   }
 
@@ -2099,20 +2426,28 @@ class _ProductReportState extends State<ProductReport> {
       columns: [
         DataColumn(
             label: Text('Product',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold))),
         DataColumn(
             label: Text('Qty Sold',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-        if (showActions) DataColumn(
-            label: Text('Actions',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold))),
+        if (showActions)
+          DataColumn(
+              label: Text('Actions',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold))),
       ],
       rows: sortedSales.map((entry) {
         final product = products.firstWhere(
-              (p) => p.id == entry.key,
+          (p) => p.id == entry.key,
           orElse: () => Product(
-            id: '', name: 'Unknown', quantity: 0, price: 0.0,
-            status: 'unknown', timeAdded: DateTime.now(),
+            id: '',
+            name: 'Unknown',
+            quantity: 0,
+            price: 0.0,
+            status: 'unknown',
+            timeAdded: DateTime.now(),
           ),
         );
 
@@ -2120,7 +2455,9 @@ class _ProductReportState extends State<ProductReport> {
 
         return DataRow(
           color: MaterialStateProperty.resolveWith<Color>((states) {
-            return isSelected ? Colors.blue.withOpacity(0.2) : Colors.transparent;
+            return isSelected
+                ? Colors.blue.withOpacity(0.2)
+                : Colors.transparent;
           }),
           cells: [
             DataCell(
@@ -2135,16 +2472,18 @@ class _ProductReportState extends State<ProductReport> {
               onTap: () => _selectProduct(product),
             ),
             DataCell(
-              Text('${entry.value}', style: const TextStyle(color: Colors.white)),
+              Text('${entry.value}',
+                  style: const TextStyle(color: Colors.white)),
               onTap: () => _selectProduct(product),
             ),
-            if (showActions) DataCell(
-              IconButton(
-                icon: const Icon(Icons.visibility, color: Colors.blue),
-                onPressed: () => _selectProduct(product),
-                tooltip: 'View details',
+            if (showActions)
+              DataCell(
+                IconButton(
+                  icon: const Icon(Icons.visibility, color: Colors.blue),
+                  onPressed: () => _selectProduct(product),
+                  tooltip: 'View details',
+                ),
               ),
-            ),
           ],
         );
       }).toList(),
@@ -2181,7 +2520,8 @@ class _ProductReportState extends State<ProductReport> {
     }
 
     final sortedMonths = monthlySales.keys.toList()
-      ..sort((a, b) => DateFormat('MMM y').parse(a).compareTo(DateFormat('MMM y').parse(b)));
+      ..sort((a, b) =>
+          DateFormat('MMM y').parse(a).compareTo(DateFormat('MMM y').parse(b)));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -2199,18 +2539,37 @@ class _ProductReportState extends State<ProductReport> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: _clearProductSelection,
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _downloadProductSpecificReport(),
+                    icon: Icon(Icons.download, size: 18),
+                    label: Text('Download Product Report'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[800],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: _clearProductSelection,
+                  ),
+                ],
               ),
             ],
           ),
 
           const Divider(color: Colors.white54),
 
-          // Product summary card
+          // Product summary card with date range info
           Card(
-            color: const Color(0xFF0A0E21).withOpacity(0.5),
+            color: Color(0xFF0A0E21).withOpacity(0.5),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -2224,17 +2583,23 @@ class _ProductReportState extends State<ProductReport> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
+                  if (_selectedDateRange != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Date Range: ${DateFormat('MMM d, y').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, y').format(_selectedDateRange!.end)}',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
                   Row(
                     children: [
                       _buildStatCard('Total Sold', '$totalQuantity'),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       _buildStatCard('Current Stock', '${product.quantity}'),
-                      const SizedBox(width: 8),
-                      _buildStatCard(
-                          'Total Revenue',
-                          'KES ${totalRevenue.toStringAsFixed(2)}'
-                      ),
+                      SizedBox(width: 8),
+                      _buildStatCard('Total Revenue',
+                          'KES ${totalRevenue.toStringAsFixed(2)}'),
                     ],
                   ),
                 ],
@@ -2242,124 +2607,137 @@ class _ProductReportState extends State<ProductReport> {
             ),
           ),
 
+          if (_selectedDateRange != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'Showing data for ${DateFormat('MMM d, y').format(_selectedDateRange!.start)} to ${DateFormat('MMM d, y').format(_selectedDateRange!.end)}',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+
           const SizedBox(height: 16),
 
           // Date filter controls
           Row(
             children: [
               Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _selectDateRange(context),
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: Text(
-                      _selectedDateRange != null
-                          ? '${DateFormat('MMM d, y').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, y').format(_selectedDateRange!.end)}'
-                          : 'Filter by Date Range',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0A0E21),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
+                child: ElevatedButton.icon(
+                  onPressed: () => _selectDateRange(context),
+                  icon: const Icon(Icons.calendar_today, size: 16),
+                  label: Text(
+                    _selectedDateRange != null
+                        ? '${DateFormat('MMM d, y').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, y').format(_selectedDateRange!.end)}'
+                        : 'Filter by Date Range',
+                    style: const TextStyle(fontSize: 14),
                   ),
-              ),
-                  if (_selectedDateRange != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8.0),
-                child: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: _clearDateFilter,
-                  tooltip: 'Clear filter',
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.red.withOpacity(0.3),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0A0E21),
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
+              if (_selectedDateRange != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: _clearDateFilter,
+                    tooltip: 'Clear filter',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.red.withOpacity(0.3),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
             ],
           ),
 
           const SizedBox(height: 16),
 
           // Sales chart
-        Text(
-          'Revenue Trend',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (sortedMonths.isNotEmpty)
-    Container(
-      height: 200,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A0E21).withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: sortedMonths.length,
-              itemBuilder: (context, index) {
-                final month = sortedMonths[index];
-                final sales = monthlySales[month]!;
-                final maxRevenue = sortedMonths
-                    .map((m) => monthlySales[m]!['revenue'] as double)
-                    .reduce((a, b) => a > b ? a : b);
-                final height = (sales['revenue'] / maxRevenue) * 100;
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Tooltip(
-                        message: 'KES ${sales['revenue'].toStringAsFixed(2)} in $month (${sales['quantity']} sold)',
-                        child: Container(
-                          width: 40,
-                          height: height,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Colors.greenAccent, Colors.green],
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        month.split(' ')[0],
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+          Text(
+            'Revenue Trend',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            'Monthly Revenue (KES)',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-        ],
-      ),
-    )
+          if (sortedMonths.isNotEmpty)
+            Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0E21).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: sortedMonths.length,
+                      itemBuilder: (context, index) {
+                        final month = sortedMonths[index];
+                        final sales = monthlySales[month]!;
+                        final maxRevenue = sortedMonths
+                            .map((m) => monthlySales[m]!['revenue'] as double)
+                            .reduce((a, b) => a > b ? a : b);
+                        final height = (sales['revenue'] / maxRevenue) * 100;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Tooltip(
+                                message:
+                                    'KES ${sales['revenue'].toStringAsFixed(2)} in $month (${sales['quantity']} sold)',
+                                child: Container(
+                                  width: 40,
+                                  height: height,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.greenAccent,
+                                        Colors.green
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                month.split(' ')[0],
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Monthly Revenue (KES)',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            )
           else
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -2385,24 +2763,25 @@ class _ProductReportState extends State<ProductReport> {
             ...salesDetails
                 .take(5)
                 .map((sale) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.circle, size: 8, color: Colors.green),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${sale['quantity']} × KES ${product.price.toStringAsFixed(2)}',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ),
-                  Text(
-                    DateFormat('MMM d, y').format(sale['timestamp']),
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ],
-              ),
-            ))
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.circle,
+                              size: 8, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${sale['quantity']} × KES ${product.price.toStringAsFixed(2)}',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                          Text(
+                            DateFormat('MMM d, y').format(sale['timestamp']),
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ))
                 .toList(),
           if (salesDetails.length > 5)
             TextButton(
@@ -2515,16 +2894,16 @@ class _ProductReportState extends State<ProductReport> {
                   color: product.quantity == 0
                       ? Colors.red.withOpacity(0.3)
                       : product.quantity < 10
-                      ? Colors.orange.withOpacity(0.3)
-                      : Colors.green.withOpacity(0.3),
+                          ? Colors.orange.withOpacity(0.3)
+                          : Colors.green.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   product.quantity == 0
                       ? 'Out of Stock'
                       : product.quantity < 10
-                      ? 'Low Stock'
-                      : 'In Stock',
+                          ? 'Low Stock'
+                          : 'In Stock',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -2603,6 +2982,167 @@ class _ProductReportState extends State<ProductReport> {
     );
   }
 
+  Future<void> _downloadProductSpecificReport() async {
+    final product = _selectedProduct!;
+    final salesDetails = _selectedDateRange != null
+        ? _filteredSalesDetails
+        : productSalesDetails[product.id] ?? [];
+
+    final totalQuantity = _selectedDateRange != null
+        ? _filteredSalesQuantity
+        : productSalesQuantity[product.id] ?? 0;
+
+    final totalRevenue = _selectedDateRange != null
+        ? _filteredSalesRevenue
+        : productSalesRevenue[product.id] ?? 0.0;
+
+    try {
+      final pdf = pw.Document();
+      final imageBytes = await _networkImageToByteArray(
+        'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/logo/logo2.png',
+      );
+
+      final now = DateTime.now();
+      final formattedDate = DateFormat('dd/MM/yyyy').format(now);
+      final formattedTime = DateFormat('HH:mm').format(now);
+
+      pdf.addPage(
+        pw.Page(
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Center(
+                  child: pw.Image(
+                    pw.MemoryImage(imageBytes),
+                    width: 150,
+                    height: 50,
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Text(
+                  'Product Sales Report - ${product.name}',
+                  style: pw.TextStyle(
+                      fontSize: 18, fontWeight: pw.FontWeight.bold),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 10),
+                if (_selectedDateRange != null)
+                  pw.Text(
+                    'Date Range: ${DateFormat('MMM d, y').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, y').format(_selectedDateRange!.end)}',
+                    style: pw.TextStyle(fontSize: 14),
+                  ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  'Generated on: $formattedDate at $formattedTime',
+                  style: pw.TextStyle(fontSize: 12),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  'Generated by: ${widget.adminInfo?['name'] ?? 'N/A'} (${widget.adminInfo?['task'] ?? 'N/A'})',
+                  style: pw.TextStyle(fontSize: 12),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Product: ${product.name}',
+                      style: pw.TextStyle(fontSize: 14),
+                    ),
+                    pw.Text(
+                      'Price: KES ${product.price.toStringAsFixed(2)}',
+                      style: pw.TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 10),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Total Sold: $totalQuantity',
+                      style: pw.TextStyle(fontSize: 14),
+                    ),
+                    pw.Text(
+                      'Total Revenue: KES ${totalRevenue.toStringAsFixed(2)}',
+                      style: pw.TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+                pw.Text(
+                  'Sales Details',
+                  style: pw.TextStyle(
+                      fontSize: 16, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 10),
+                if (salesDetails.isNotEmpty)
+                  pw.Table.fromTextArray(
+                    headers: ['Date', 'Quantity', 'Amount'],
+                    data: salesDetails.map((sale) {
+                      return [
+                        DateFormat('dd MMM yyyy').format(sale['timestamp']),
+                        sale['quantity'].toString(),
+                        'KES ${sale['revenue'].toStringAsFixed(2)}',
+                      ];
+                    }).toList(),
+                  )
+                else
+                  pw.Text(
+                    'No sales data available for the selected period',
+                    style: pw.TextStyle(fontSize: 12),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
+
+      final Uint8List pdfBytes = await pdf.save();
+      final fileName = _selectedDateRange != null
+          ? '${product.name}_sales_${DateFormat('yyyyMMdd').format(_selectedDateRange!.start)}_to_${DateFormat('yyyyMMdd').format(_selectedDateRange!.end)}.pdf'
+          : '${product.name}_sales_report.pdf';
+
+      if (kIsWeb) {
+        final blob = html.Blob([pdfBytes], 'application/pdf');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', fileName)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdfBytes,
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating PDF: $e')),
+      );
+    }
+  }
+
+  Future<Uint8List> _networkImageToByteArray(String imageUrl) async {
+    try {
+      if (kIsWeb) {
+        final response = await html.HttpRequest.request(
+          imageUrl,
+          method: 'GET',
+          responseType: 'arraybuffer',
+        );
+        final typedArray = response.response as dynamic;
+        return Uint8List.view(typedArray);
+      } else {
+        final response = await http.get(Uri.parse(imageUrl));
+        return response.bodyBytes;
+      }
+    } catch (e) {
+      print('Error loading image: $e');
+      return Uint8List(0);
+    }
+  }
+
   Future<void> _generateReport() async {
     switch (_selectedViewIndex) {
       case 0:
@@ -2636,8 +3176,8 @@ class _ProductReportState extends State<ProductReport> {
             pw.SizedBox(height: 20),
             pw.Text(
               _selectedDateRange != null
-                  ? 'Sales Report (${DateFormat('MMM d, y').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, y').format(_selectedDateRange!.end)})'
-                  : 'Sales Report',
+                  ? 'Product Sales Report (${DateFormat('MMM d, y').format(_selectedDateRange!.start)} - ${DateFormat('MMM d, y').format(_selectedDateRange!.end)})'
+                  : 'Product Sales Report',
               style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
@@ -2650,7 +3190,8 @@ class _ProductReportState extends State<ProductReport> {
             if (_selectedProduct != null) ...[
               pw.Text(
                 'Product: ${_selectedProduct!.name}',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                style:
+                    pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 10),
               pw.Text(
@@ -2673,10 +3214,14 @@ class _ProductReportState extends State<ProductReport> {
               headers: ['Product Name', 'Qty Sold', 'Revenue (KES)'],
               data: productSalesQuantity.entries.map((entry) {
                 final product = products.firstWhere(
-                      (p) => p.id == entry.key,
+                  (p) => p.id == entry.key,
                   orElse: () => Product(
-                    id: '', name: 'Unknown', quantity: 0, price: 0.0,
-                    status: 'unknown', timeAdded: DateTime.now(),
+                    id: '',
+                    name: 'Unknown',
+                    quantity: 0,
+                    price: 0.0,
+                    status: 'unknown',
+                    timeAdded: DateTime.now(),
                   ),
                 );
                 return [
@@ -2697,8 +3242,8 @@ class _ProductReportState extends State<ProductReport> {
       _selectedProduct != null
           ? '${_selectedProduct!.name}_sales_report.pdf'
           : _selectedDateRange != null
-          ? 'sales_report_${DateFormat('yyyyMMdd').format(_selectedDateRange!.start)}_to_${DateFormat('yyyyMMdd').format(_selectedDateRange!.end)}.pdf'
-          : 'sales_report.pdf',
+              ? 'sales_report_${DateFormat('yyyyMMdd').format(_selectedDateRange!.start)}_to_${DateFormat('yyyyMMdd').format(_selectedDateRange!.end)}.pdf'
+              : 'sales_report.pdf',
     );
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -10,11 +11,10 @@ import 'package:web_project/reg.dart';
 import 'addproduct.dart';
 import 'customers.dart';
 import 'generatebarcode.dart';
-import 'ordersadmin.dart';
+import 'help.dart';
 import 'products.dart';
 import 'profile.dart';
 import 'reports.dart';
-import 'dart:math';
 
 class AdminDashboard extends StatelessWidget {
   @override
@@ -22,8 +22,15 @@ class AdminDashboard extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: Colors.green[50],
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Color(0xFF0A0E21),
+        cardTheme: CardTheme(
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          color: Color(0xFF1D1E33),
+        ),
       ),
       home: AdminHomePage(),
     );
@@ -32,7 +39,6 @@ class AdminDashboard extends StatelessWidget {
 
 class AdminHomePage extends StatefulWidget {
   final String? adminId;
-
 
   AdminHomePage({Key? key, this.adminId}) : super(key: key);
 
@@ -45,13 +51,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
   Timer? _inactivityTimer;
   String? _cachedAdminName;
   String? _cachedAdminProfilePic;
+  final GlobalKey _helpButtonKey = GlobalKey(); // Add this line
+  bool _showHelp = false;
 
   final List<String> _menuTitles = [
     'Dashboard',
     'Customers',
     'Products List',
     'Add Product',
-    'Orders',
     'Reports',
     'Profile'
   ];
@@ -61,7 +68,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
     Icons.people_sharp,
     Icons.grid_view,
     Icons.add_box,
-    Icons.list,
     Icons.download_for_offline_rounded,
     Icons.admin_panel_settings_outlined
   ];
@@ -77,11 +83,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
       CustomerManagementPage(),
       ProductsGridPage(),
       AddProductPage(),
-      OrderManagementPage(),
       ReportsPage(),
       AdminProfilePage(),
     ];
     _resetInactivityTimer();
+  }
+
+  void _toggleHelp() {
+    setState(() {
+      _showHelp = !_showHelp;
+    });
   }
 
   Future<void> _loadCachedAdminData() async {
@@ -119,17 +130,191 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return Listener(
       onPointerDown: (_) => _resetInactivityTimer(),
       child: Scaffold(
+        backgroundColor: Color(0xFF0A0E21),
         appBar: AppBar(
           title: _buildAppBarTitle(),
-          backgroundColor: const Color(0xFF1D1E33),
+          backgroundColor: Color(0xFF1D1E33),
           leading: isMobile ? _buildMenuButton(context) : null,
+          elevation: 0,
         ),
         drawer: isMobile ? _buildDrawer() : null,
-        body: Row(
-          children: [
-            if (!isMobile) _buildSidebar(),
-            Expanded(child: _pages[_selectedIndex]),
-          ],
+          body: Row(
+            children: [
+              if (!isMobile) _buildSidebar(),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF0A0E21), Color(0xFF1D1E33)],
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      _pages[_selectedIndex],
+                      if (_showHelp) _buildHelpBubble(context),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+      ),
+    );
+  }
+
+  Widget _buildHelpBubble(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 800;
+
+    final List<Map<String, String>> helpContent = [
+      // Your help content here (same as before)
+      {
+        'title': 'Dashboard Help',
+        'content': '''
+The Dashboard provides an overview of store operations:
+- View key metrics: Today's visits, registered users, active carts, and sales
+- Check weekly sales trends in the line chart
+- See payment method distribution
+- Monitor user satisfaction
+- Get alerts for low stock products
+- View new customer inquiries
+'''
+      },
+      {
+        'title': 'Customers Management Help',
+        'content': '''
+To manage customers:
+1. Search for a customer using the search bar
+2. Click on a customer tile to view details
+3. For active carts:
+   - Increase/Decrease product quantity using +/- buttons
+   - Remove products using the bin icon
+4. View transaction history by clicking on Transaction IDs
+'''
+      },
+      {
+        'title': 'Products List Help',
+        'content': '''
+To manage products:
+1. Browse products in grid view or use search
+2. Click the eye icon on a product card to expand details
+3. Update product information:
+   - Edit name, price, quantity, category
+   - Upload new product image
+4. Download barcode by clicking "Download Barcode"
+5. Delete products using the trash icon
+'''
+      },
+      {
+        'title': 'Add Product Help',
+        'content': '''
+To add a new product:
+1. Fill in all required fields:
+   - Product Name
+   - Price
+   - Initial Quantity
+   - Category and Subcategory
+2. Upload a product image
+3. Click "Upload Product" to save
+4. The system will automatically generate a barcode
+
+Tips:
+- Use clear, high-quality product images
+- Double-check pricing before saving
+- Set reasonable initial quantities
+'''
+      },
+      {
+        'title': 'Reports Help',
+        'content': '''
+Generating Reports:
+
+Sales Reports:
+1. Navigate to "Sales Reports"
+2. Select date range
+3. Apply filters (Payment Method, Search)
+4. Click "Generate Report"
+5. Download as PDF or export to CSV
+
+Product Reports:
+1. Navigate to "Products Reports"
+2. View stock levels and popular items
+3. Generate out-of-stock alerts
+4. Apply filters (Date Range, By Product)
+5. Download report
+
+Customer Reports:
+1. Navigate to "Customer Reports"
+2. Select date range
+3. Apply filters (active/inactive)
+4. Generate and download report
+'''
+      },
+      {
+        'title': 'Profile Help',
+        'content': '''
+Profile Management:
+- View your admin profile details
+- Update your personal information
+- Change your password
+- View your activity log
+- Check your assigned role and permissions
+
+Security Tips:
+- Use a strong, unique password
+- Never share your login credentials
+- Log out when not using the admin panel
+- Contact the main administrator for role changes
+'''
+      },
+    ];
+
+    return Positioned(
+      right: isMobile ? 16 : 80,
+      top: 80,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: isMobile ? screenWidth * 0.9 : 400,
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Color(0xFF1D1E33),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blueAccent, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    helpContent[_selectedIndex]['title']!,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white, size: 20),
+                    onPressed: _toggleHelp,
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                helpContent[_selectedIndex]['content']!,
+                style: GoogleFonts.poppins(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -147,28 +332,36 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
         ),
         Spacer(),
-        _buildAdminRow(), // This now just shows the help icon and logout button
+        _buildAdminRow(),
       ],
     );
   }
 
   Widget _buildAdminRow() {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
+          key: _helpButtonKey,
           icon: Icon(Icons.help_outline, color: Colors.white),
-          onPressed: () {
-            // TODO: Implement help functionality
-          },
+          onPressed: _toggleHelp, // Use the toggle method
         ),
-        SizedBox(width: 10),
-        Text(
-          'Logout',
-          style: GoogleFonts.poppins(color: Colors.white, fontSize: 16),
-        ),
-        SizedBox(width: 5),
-        IconButton(
-          icon: Icon(Icons.logout, color: Colors.white),
+        SizedBox(width: 8),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: Colors.white.withOpacity(0.5)),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          icon: Icon(Icons.logout, color: Colors.white, size: 18),
+          label: Text(
+            'Logout',
+            style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
+          ),
           onPressed: () => _showLogoutConfirmation(context),
         ),
       ],
@@ -178,20 +371,15 @@ class _AdminHomePageState extends State<AdminHomePage> {
   Future<void> _showLogoutConfirmation(BuildContext context) async {
     return showDialog<void>(
       context: context,
-      barrierDismissible: false, // User must tap button to close
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Confirm Logout'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                Text('Are you sure you want to logout?'),
-              ],
-            ),
-          ),
+          backgroundColor: Color(0xFF1D1E33),
+          title: Text('Confirm Logout', style: TextStyle(color: Colors.white)),
+          content: Text('Are you sure you want to logout?', style: TextStyle(color: Colors.white70)),
           actions: <Widget>[
             TextButton(
-              child: Text('Cancel'),
+              child: Text('Cancel', style: TextStyle(color: Colors.white)),
               onPressed: () {
                 Navigator.of(context).pop();
               },
@@ -217,7 +405,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return Builder(
       builder: (BuildContext scaffoldContext) {
         return IconButton(
-          icon: Icon(Icons.menu),
+          icon: Icon(Icons.menu, color: Colors.white),
           onPressed: () {
             Scaffold.of(scaffoldContext).openDrawer();
           },
@@ -229,7 +417,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   Widget _buildSidebar() {
     return Container(
       width: 250,
-      color: const Color(0xFF1D1E33),
+      color: Color(0xFF1D1E33),
       child: Column(
         children: [
           SizedBox(height: 20),
@@ -243,7 +431,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               placeholder: (context, url) => CircularProgressIndicator(),
               errorWidget: (context, url, error) => Icon(
                 Icons.error_outline,
-                color: Colors.red,
+                color: Colors.grey,
                 size: 60,
               ),
             ),
@@ -252,27 +440,31 @@ class _AdminHomePageState extends State<AdminHomePage> {
             child: ListView.builder(
               itemCount: _menuTitles.length,
               itemBuilder: (context, index) {
-                return ListTile(
-                  leading: Icon(
-                    _menuIcons[index],
-                    color: _selectedIndex == index ? Colors.blueAccent : Colors.white,
+                return Container(
+                  margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: _selectedIndex == index ? Colors.blue.withOpacity(0.2) : Colors.transparent,
                   ),
-                  title: Text(
-                    _menuTitles[index],
-                    style: GoogleFonts.poppins(
+                  child: ListTile(
+                    leading: Icon(
+                      _menuIcons[index],
                       color: _selectedIndex == index ? Colors.blueAccent : Colors.white,
-                      fontWeight: FontWeight.w500,
                     ),
+                    title: Text(
+                      _menuTitles[index],
+                      style: GoogleFonts.poppins(
+                        color: _selectedIndex == index ? Colors.blueAccent : Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    selected: _selectedIndex == index,
+                    onTap: () {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    },
                   ),
-                  selected: _selectedIndex == index,
-                  onTap: () {
-                    setState(() {
-                      _selectedIndex = index;
-                      if (MediaQuery.of(context).size.width < 800) {
-                        Navigator.pop(context);
-                      }
-                    });
-                  },
                 );
               },
             ),
@@ -284,7 +476,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget _buildDrawer() {
     return Drawer(
-      backgroundColor: const Color(0xFF1D1E33),
+      backgroundColor: Color(0xFF1D1E33),
       child: _buildSidebar(),
     );
   }
@@ -324,7 +516,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _fetchNewInquiries() async {
     FirebaseFirestore.instance
         .collection('feedback')
-        .where('response', isNull: true)
+        .where('isResponded', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {
       final newCount = snapshot.docs.length;
@@ -371,8 +563,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Future<int> _getActiveCarts() async {
-    final activeCartsSnapshot = await FirebaseFirestore.instance.collectionGroup('cart')
-        .where('cartStatus', isEqualTo: 'active').get();
+    final activeCartsSnapshot = await FirebaseFirestore.instance
+        .collectionGroup('cart')
+        .where('products', isNotEqualTo: [])
+        .get();
     return activeCartsSnapshot.docs.length;
   }
 
@@ -410,6 +604,66 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     }
 
     return paymentMethods;
+  }
+
+  void _showRestockDialog(BuildContext context, String productId, String productName) {
+    final quantityController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Color(0xFF1D1E33), // Dark background for the dialog
+          title: Text(
+            'Restock $productName',
+            style: TextStyle(color: Colors.white), // White text for visibility
+          ),
+          content: TextField(
+            controller: quantityController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Quantity to add',
+              labelStyle: TextStyle(color: Colors.white70), // Lighter text for label
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey[800], // Darker fill color for the text field
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: TextStyle(color: Colors.white)), // White text for button
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (quantityController.text.isNotEmpty) {
+                  final quantityToAdd = int.tryParse(quantityController.text) ?? 0;
+                  if (quantityToAdd > 0) {
+                    final doc = await FirebaseFirestore.instance
+                        .collection('products')
+                        .doc(productId)
+                        .get();
+                    final currentQty = doc['quantity'] ?? 0;
+
+                    await FirebaseFirestore.instance
+                        .collection('products')
+                        .doc(productId)
+                        .update({
+                      'quantity': currentQty + quantityToAdd,
+                    });
+
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$productName restocked successfully')),
+                    );
+                  }
+                }
+              },
+              child: Text('Restock'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<List<FlSpot>> _fetchLineChartData() async {
@@ -494,7 +748,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   '${DateFormat('EEE, d MMMM y').format(DateTime.now())}',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
-                    color: Colors.white,
+                    color: Colors.white70,
                   ),
                 ),
               ],
@@ -512,17 +766,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   return Wrap(
                     spacing: 16,
                     runSpacing: 16,
+                    alignment: WrapAlignment.spaceEvenly,
                     children: [
-                      _buildCard('Today\'s Visits', counts['dailyVisits'].toString(), Icons.visibility, Colors.blueAccent),
-                      _buildCard('Registered Users', counts['totalUsers'].toString(), Icons.people, Colors.greenAccent),
-                      _buildCard('Active Carts', counts['activeCarts'].toString(), Icons.shopping_cart, Colors.orangeAccent),
-                      _buildCard('Total Sales Today', counts['totalSalesToday'].toString(), Icons.attach_money, Colors.purpleAccent),
+                      _buildStatCard('Today\'s Visits', counts['dailyVisits'].toString(), Icons.visibility, Colors.blueAccent),
+                      _buildStatCard('Registered Users', counts['totalUsers'].toString(), Icons.people, Colors.greenAccent),
+                      _buildStatCard('Active Carts', counts['activeCarts'].toString(), Icons.shopping_cart, Colors.orangeAccent),
+                      _buildStatCard('Total Sales Today', counts['totalSalesToday'].toString(), Icons.attach_money, Colors.purpleAccent),
                     ],
                   );
                 }
               },
             ),
-            Divider(color: Colors.grey, thickness: 1, height: 40),
+            SizedBox(height: 20),
             isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
           ],
         ),
@@ -549,44 +804,82 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Widget _buildDesktopLayout() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
-        Expanded(
-          flex: 2,
-          child: Column(
-            children: [
-              _buildLineChartCard(),
-              SizedBox(height: 20),
-              _buildPieChartCard(),
-            ],
-          ),
-        ),
-        VerticalDivider(color: Colors.grey, thickness: 1, width: 20),
-        Expanded(
-          flex: 1,
-          child: Column(
-            children: [
-              _buildUserSatisfactionCard(),
-              SizedBox(height: 20),
-              _buildLowStockProductsCard(),
-              if (_newInquiryCount > 0) ...[
-                SizedBox(height: 20),
-                _buildNewInquiriesCard(),
-              ],
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: Column(
+                children: [
+                  _buildLineChartCard(),
+                  SizedBox(height: 20),
+                  _buildPieChartCard(),
+                ],
+              ),
+            ),
+            SizedBox(width: 20),
+            Expanded(
+              flex: 1,
+              child: Column(
+                children: [
+                  _buildUserSatisfactionCard(),
+                  SizedBox(height: 20),
+                  _buildLowStockProductsCard(),
+                  if (_newInquiryCount > 0) ...[
+                    SizedBox(height: 20),
+                    _buildNewInquiriesCard(),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    bool isMobile = MediaQuery.of(context).size.width < 800;
+
+    return Container(
+      width: isMobile ? MediaQuery.of(context).size.width * 0.43 : 200,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: isMobile ? 30 : 40, color: color),
+              SizedBox(height: isMobile ? 5 : 10),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: isMobile ? 14 : 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: isMobile ? 2 : 5),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: isMobile ? 18 : 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNewInquiriesCard() {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -633,9 +926,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () {
-                  // TODO: Implement navigation to inquiries page
                   setState(() {
-                    _newInquiryCount = 0; // Clear count when viewing all
+                    _newInquiryCount = 0;
                   });
                 },
                 child: Text(
@@ -652,54 +944,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
-  Widget _buildCard(String title, String count, IconData icon, Color color) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Container(
-        width: 200,
-        height: 150,
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 40, color: color),
-            SizedBox(height: 10),
-            Text(
-              title,
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 5),
-            Text(
-              count,
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildLowStockProductsCard() {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SizedBox(
-          width: double.infinity,
           height: 300,
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -787,65 +1036,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
-  void _showRestockDialog(BuildContext context, String productId, String productName) {
-    final quantityController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Restock $productName'),
-          content: TextField(
-            controller: quantityController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Quantity to add',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (quantityController.text.isNotEmpty) {
-                  final quantityToAdd = int.tryParse(quantityController.text) ?? 0;
-                  if (quantityToAdd > 0) {
-                    final doc = await FirebaseFirestore.instance
-                        .collection('products')
-                        .doc(productId)
-                        .get();
-                    final currentQty = doc['quantity'] ?? 0;
-
-                    await FirebaseFirestore.instance
-                        .collection('products')
-                        .doc(productId)
-                        .update({
-                      'quantity': currentQty + quantityToAdd,
-                    });
-
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$productName restocked successfully')),
-                    );
-                  }
-                }
-              },
-              child: Text('Restock'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildLineChartCard() {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SizedBox(
@@ -871,94 +1063,100 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     ),
                     SizedBox(height: 10),
                     Expanded(
-                      child: LineChart(
-                        LineChartData(
-                          lineTouchData: LineTouchData(
-                            touchTooltipData: LineTouchTooltipData(
-                              getTooltipItems: (List<LineBarSpot> touchedSpots) {
-                                return touchedSpots.map((spot) {
-                                  return LineTooltipItem(
-                                    '${spot.y.toInt()} sales\n${_getDayLabel(spot.x.toInt())}',
-                                    GoogleFonts.poppins(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                }).toList();
-                              },
-                            ),
-                          ),
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            getDrawingHorizontalLine: (value) => FlLine(
-                              color: Colors.grey.withOpacity(0.2),
-                              strokeWidth: 1,
-                            ),
-                          ),
-                          titlesData: FlTitlesData(
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 30,
-                                getTitlesWidget: (value, meta) {
-                                  return Text(
-                                    value.toInt().toString(),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 20,
-                                getTitlesWidget: (value, meta) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text(
-                                      _getDayLabel(value.toInt()),
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 10,
-                                        color: Colors.grey,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: LineChart(
+                          LineChartData(
+                            lineTouchData: LineTouchData(
+                              touchTooltipData: LineTouchTooltipData(
+                                getTooltipItems: (List<LineBarSpot> touchedSpots) {
+                                  return touchedSpots.map((spot) {
+                                    return LineTooltipItem(
+                                      '${spot.y.toInt()} KES\n${_getDayLabel(spot.x.toInt())}',
+                                      GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  }).toList();
                                 },
                               ),
                             ),
-                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          ),
-                          borderData: FlBorderData(
-                            show: true,
-                            border: Border(
-                              bottom: BorderSide(
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: false,
+                              getDrawingHorizontalLine: (value) => FlLine(
                                 color: Colors.grey.withOpacity(0.2),
-                                width: 1,
+                                strokeWidth: 1,
                               ),
                             ),
+                            titlesData: FlTitlesData(
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 30,
+                                  getTitlesWidget: (value, meta) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8.0),
+                                      child: Text(
+                                        value.toInt().toString(),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 10,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 20,
+                                  getTitlesWidget: (value, meta) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Text(
+                                        _getDayLabel(value.toInt()),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 10,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            ),
+                            borderData: FlBorderData(
+                              show: true,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.grey.withOpacity(0.2),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            minX: 0,
+                            maxX: 6,
+                            minY: 0,
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: spots,
+                                isCurved: true,
+                                color: Colors.blueAccent,
+                                barWidth: 3,
+                                isStrokeCapRound: true,
+                                dotData: FlDotData(show: true),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  color: Colors.blueAccent.withOpacity(0.1),
+                                ),
+                              )
+                            ],
                           ),
-                          minX: 0,
-                          maxX: 6,
-                          minY: 0,
-                          lineBarsData: [
-                          LineChartBarData(
-                          spots: spots,
-                          isCurved: true,
-                          color: Colors.blueAccent,
-                          barWidth: 3,
-                          isStrokeCapRound: true,
-                          dotData: FlDotData(show: true),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: Colors.blueAccent.withOpacity(0.1),
-                          ),
-                          )
-                          ],
                         ),
                       ),
                     ),
@@ -974,10 +1172,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   Widget _buildPieChartCard() {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SizedBox(
@@ -1044,14 +1238,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   Widget _buildUserSatisfactionCard() {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SizedBox(
-          width: double.infinity,
           height: 150,
           child: FutureBuilder<double>(
             future: _userSatisfactionFuture,

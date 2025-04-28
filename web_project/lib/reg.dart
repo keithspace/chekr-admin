@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +8,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_project/panel.dart';
-import 'dart:io';
 import 'package:flutter/services.dart';
 
 // Admin role constants
@@ -46,6 +46,8 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   bool _isLoading = false;
   bool _accountLocked = false;
   String _lockedAccountMessage = '';
+  final _formKey = GlobalKey<FormState>();
+  bool _obscurePassword = true; // For hiding/showing password
 
   Future<void> _checkAccountStatus(String email) async {
     try {
@@ -295,180 +297,383 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.width < 600;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1D1E33),
+      backgroundColor: Color(0xFF121212), // Darker background
       body: Stack(
         children: [
+          // Background gradient
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF1A1A2E),
+                  Color(0xFF16213E),
+                ],
+              ),
+            ),
+          ),
+
+          // Content
           Center(
             child: SingleChildScrollView(
               child: Container(
-                width: 400,
-                padding: EdgeInsets.all(24.0),
+                width: isSmallScreen ? size.width * 0.9 : 450,
+                margin: EdgeInsets.all(24),
+                padding: EdgeInsets.all(32),
                 decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(12),
+                  color: Color(0xFF1E1E1E).withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                      offset: Offset(0, 10),
                     ),
                   ],
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1,
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: 'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/logo/logo.png',
-                      width: 150,
-                      height: 150,
-                      fit: BoxFit.contain,
-                      placeholder: (context, url) => CircularProgressIndicator(),
-                      errorWidget: (context, url, error) => Icon(
-                        Icons.error_outline,
-                        color: Colors.red,
-                        size: 60,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Logo with animation
+                      Hero(
+                        tag: 'app-logo',
+                        child: CachedNetworkImage(
+                          imageUrl: 'https://wlbdvdbnecfwmxxftqrk.supabase.co/storage/v1/object/public/productimages/logo/logo.png',
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.contain,
+                          placeholder: (context, url) => Container(
+                            width: 120,
+                            height: 120,
+                            padding: EdgeInsets.all(24),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Icon(
+                            Icons.error_outline,
+                            color: Colors.red,
+                            size: 60,
+                          ),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 24),
-                    Text(
-                      'Chekr Administrator',
-                      style: GoogleFonts.poppins(
-                        color: Colors.blueAccent,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (_accountLocked) ...[
-                      SizedBox(height: 16),
+
+                      SizedBox(height: 24),
+
+                      // Title
                       Text(
-                        _lockedAccountMessage,
-                        style: GoogleFonts.poppins(
-                          color: Colors.red,
-                          fontSize: 14,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                    SizedBox(height: 24),
-                    TextField(
-                      controller: _emailController,
-                      style: GoogleFonts.poppins(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        labelStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.blueAccent),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        if (_accountLocked) {
-                          _checkAccountStatus(value.trim());
-                        }
-                      },
-                    ),
-                    SizedBox(height: 16),
-                    TextField(
-                      controller: _passwordController,
-                      style: GoogleFonts.poppins(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        labelStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.blueAccent),
-                        ),
-                      ),
-                      obscureText: true,
-                    ),
-                    SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _accountLocked ? null : _loginAdmin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _accountLocked ? Colors.grey : Colors.green,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Log in',
+                        'Admin Portal',
                         style: GoogleFonts.poppins(
                           color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                    ),
-                    SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () {
-                        // Add forgot password functionality
-                        if (_emailController.text.isNotEmpty) {
-                          FirebaseAuth.instance.sendPasswordResetEmail(
-                              email: _emailController.text.trim());
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Password reset link sent to your email'),
-                            ),
-                          );
-                        } else {
-                          _showErrorDialog('Please enter your email first');
-                        }
-                      },
-                      child: Text(
-                        'Forgot Password?',
+
+                      SizedBox(height: 8),
+
+                      // Subtitle
+                      Text(
+                        'Sign in to continue',
                         style: GoogleFonts.poppins(
-                          color: Colors.blueAccent,
+                          color: Colors.grey[400],
+                          fontSize: 14,
                         ),
                       ),
-                    ),
-                  ],
+
+                      if (_accountLocked) ...[
+                        SizedBox(height: 20),
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.5),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _lockedAccountMessage,
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.red[200],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      SizedBox(height: 32),
+
+                      // Email Field
+                      TextFormField(
+                        controller: _emailController,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          labelStyle: GoogleFonts.poppins(
+                            color: Colors.grey[400],
+                          ),
+                          prefixIcon: Icon(
+                            Icons.email_outlined,
+                            color: Colors.grey[500],
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[900]!.withOpacity(0.5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 16,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: Colors.grey[800]!,
+                              width: 1,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: Colors.blueAccent,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your email';
+                          }
+                          if (!value.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                        onChanged: (value) {
+                          if (_accountLocked) {
+                            _checkAccountStatus(value.trim());
+                          }
+                        },
+                      ),
+
+                      SizedBox(height: 20),
+
+                      // Password Field
+                      // Password Field
+                      TextFormField(
+                        controller: _passwordController,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          labelStyle: GoogleFonts.poppins(
+                            color: Colors.grey[400],
+                          ),
+                          prefixIcon: Icon(
+                            Icons.lock_outline,
+                            color: Colors.grey[500],
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: Colors.grey[500],
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[900]!.withOpacity(0.5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 16,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: Colors.grey[800]!,
+                              width: 1,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: Colors.blueAccent,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        obscureText: _obscurePassword,  // Use the state variable here
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your password';
+                          }
+                          if (value.length < 6) {
+                            return 'Password must be at least 6 characters';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      SizedBox(height: 24),
+
+                      // Login Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _accountLocked
+                              ? null
+                              : () {
+                            if (_formKey.currentState!.validate()) {
+                              _loginAdmin();
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _accountLocked
+                                ? Colors.grey[700]
+                                : Colors.blueAccent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 3,
+                            shadowColor: Colors.blueAccent.withOpacity(0.3),
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: _isLoading
+                              ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                              AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                              : Text(
+                            'LOG IN',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(height: 20),
+
+                      // Forgot Password
+                      TextButton(
+                        onPressed: () {
+                          if (_emailController.text.isNotEmpty) {
+                            FirebaseAuth.instance.sendPasswordResetEmail(
+                                email: _emailController.text.trim());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Password reset link sent to your email',
+                                  style: GoogleFonts.poppins(),
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } else {
+                            _showErrorDialog('Please enter your email first');
+                          }
+                        },
+                        child: Text(
+                          'Forgot Password?',
+                          style: GoogleFonts.poppins(
+                            color: Colors.blueAccent[200],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+
+          // Loading overlay
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withOpacity(0.6),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildDot(delay: 0),
-                        _buildDot(delay: 0.2),
-                        _buildDot(delay: 0.4),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Logging in...',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 16,
+                child: Container(
+                  padding: EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 50,
+                        height: 50,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.blueAccent),
+                        ),
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 16),
+                      Text(
+                        'Authenticating...',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

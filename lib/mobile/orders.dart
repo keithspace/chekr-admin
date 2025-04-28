@@ -39,14 +39,14 @@ class _OrderPageState extends State<OrderPage> {
   bool _paymentVerified = false;
   String? _paypalToken;
   Future<double> _convertKesToUsd(double kesAmount) async {
-   // try {
+    try {
       CurrencyRate rate = await LiveCurrencyRate.convertCurrency("KES", "USD", kesAmount);
       return rate.result;
-   /* } catch (e) {
+   } catch (e) {
       // Fallback rate in case the API fails
       debugPrint("Error getting live rate: $e");
       return kesAmount / 130.0; // Use a reasonable fallback rate
-    }*/
+    }
   }
 
   @override
@@ -189,7 +189,32 @@ class _OrderPageState extends State<OrderPage> {
     );
   }
 
+  Future<void> _silentlyWakeUpServers() async {
+    try {
+      // Fire and forget - we don't await these as we want them to run in background
+      unawaited(
+        Future.wait([
+          http.get(Uri.parse('https://paypalserver-ycch.onrender.com'))
+              .timeout(const Duration(seconds: 5))
+              .catchError((e) => null),
+          http.get(Uri.parse('https://server-iz6n.onrender.com/test'))
+              .timeout(const Duration(seconds: 5))
+              .catchError((e) => null),
+        ]).then((responses) {
+          // Optional: Log the results if needed
+          debugPrint('PayPal server status: ${responses[0]?.statusCode}');
+          debugPrint('MPesa server status: ${responses[1]?.statusCode}');
+        }),
+      );
+    } catch (e) {
+      debugPrint('Silent server wakeup error: $e');
+    }
+  }
+
   void _showPaymentOptions(BuildContext context, double totalAmount) {
+    // Silently wake up servers in the background without showing loading
+    _silentlyWakeUpServers();
+
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
@@ -198,15 +223,14 @@ class _OrderPageState extends State<OrderPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('Select Payment Mode', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            ListTile(
+           /* ListTile(
               leading: Image.asset('assets/images/card1.png', width: 40, height: 30),
               title: const Text('Card Payment'),
               onTap: () {
                 Navigator.pop(context);
                 _processCardPayment(totalAmount);
               },
-            ),
+            ),*/
             ListTile(
               leading: Image.asset('assets/images/icons8-mpesa-96.png', width: 40, height: 30),
               title: const Text('M-Pesa'),

@@ -11,6 +11,7 @@ import 'admin_response.dart';
 import 'helpcenter.dart';
 import 'landing.dart';
 import 'login.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AccountPage extends StatefulWidget {
   final String userName;
@@ -64,6 +65,20 @@ class _AccountPageState extends State<AccountPage> {
       setState(() {
         _hasNewNotifications = true;
       });
+    }
+  }
+
+  Future<void> _launchPrivacyPolicyUrl() async {
+    final url = Uri.parse('https://www.termsfeed.com/live/b23e1ec6-735e-4a2e-98b1-18454e3e4c64');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication, // Opens in browser instead of in-app
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not launch privacy policy')),
+      );
     }
   }
 
@@ -247,6 +262,12 @@ class _AccountPageState extends State<AccountPage> {
                 MaterialPageRoute(builder: (context) => const HelpCenterPage()),
               );
             },
+          ),
+          // Add the Privacy Policy tile here
+          _buildListTile(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy Policy',
+            onTap: () => _launchPrivacyPolicyUrl(),
           ),
           _buildListTile(
             icon: Icons.logout,

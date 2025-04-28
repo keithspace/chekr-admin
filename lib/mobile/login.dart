@@ -7,6 +7,7 @@ import 'home.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'biometric_auth.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -22,6 +23,8 @@ class _LoginPageState extends State<LoginPage> {
   String? _emailError;
   String? _passwordError;
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
 
   @override
   void initState() {
@@ -51,6 +54,62 @@ class _LoginPageState extends State<LoginPage> {
       print('Servers woken up successfully');
     } catch (e) {
       print('Error waking servers: $e');
+    }
+  }
+
+  Future<void> _tryBiometricLogin() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final isAvailable = await BiometricAuth.isBiometricAvailable();
+      if (!isAvailable) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric authentication not available')),
+        );
+        return;
+      }
+
+      final isAuthenticated = await BiometricAuth.authenticate();
+      if (!isAuthenticated) return;
+
+      // Check if user is already logged in (has token)
+      final token = await storage.read(key: 'auth_token');
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please login first to enable biometric authentication')),
+        );
+        return;
+      }
+
+      // Verify token with Firebase
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        await storage.delete(key: 'auth_token');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session expired. Please login again')),
+        );
+        return;
+      }
+
+      // Get user data and navigate to home
+      final userData = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .get();
+
+      final username = userData.data()?['name'] ?? 'Guest';
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage(username: username)),
+            (Route<dynamic> route) => false,
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -193,6 +252,32 @@ class _LoginPageState extends State<LoginPage> {
 
       await AuthHelper.persistLogin(currentUser);
 
+      // Ask user if they want to enable biometric login
+      if (await BiometricAuth.isBiometricAvailable() &&
+          await BiometricAuth.hasEnrolledBiometrics()) {
+        final enableBiometric = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Enable Biometric Login?'),
+            content: const Text('Would you like to enable fingerprint or face recognition for faster login?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Not Now'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Enable'),
+              ),
+            ],
+          ),
+        ) ?? false;
+
+        if (enableBiometric) {
+          await storage.write(key: 'use_biometric', value: 'true');
+        }
+      }
+
       // Wake up servers before proceeding
       await _wakeUpServers();
 
@@ -325,15 +410,23 @@ class _LoginPageState extends State<LoginPage> {
                             const SizedBox(height: 16),
                             TextField(
                               controller: _passwordController,
-                              obscureText: true,
+                              obscureText: _obscurePassword,
                               decoration: InputDecoration(
                                 filled: true,
                                 fillColor: Colors.white,
-                                hintText: 'Password',
+                                labelText: 'Password',
                                 errorText: _passwordError,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
                                 ),
+                                border: const OutlineInputBorder(),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -344,6 +437,16 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                               onPressed: _isLoading ? null : _login,
                               child: const Text('Log in'),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding: const EdgeInsets.all(16),
+                              ),
+                              onPressed: _isLoading ? null : _tryBiometricLogin,
+                              icon: const Icon(Icons.fingerprint),
+                              label: const Text('Login with Biometrics'),
                             ),
                             const SizedBox(height: 16),
                             TextButton(

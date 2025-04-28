@@ -64,21 +64,8 @@ class _AddProductPageState extends State<AddProductPage> {
   void initState() {
     super.initState();
     _resetInactivityTimer();
-    _priceController.addListener(_formatPrice);
   }
 
-  void _formatPrice() {
-    final text = _priceController.text;
-    if (!text.startsWith('Kshs. ') && text.isNotEmpty) {
-      final numericValue = text.replaceAll(RegExp(r'[^0-9]'), '');
-      if (numericValue.isNotEmpty) {
-        _priceController.value = TextEditingValue(
-          text: 'Kshs. $numericValue',
-          selection: TextSelection.collapsed(offset: 'Kshs. $numericValue'.length),
-        );
-      }
-    }
-  }
 
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
@@ -98,7 +85,6 @@ class _AddProductPageState extends State<AddProductPage> {
   @override
   void dispose() {
     _inactivityTimer?.cancel();
-    _priceController.removeListener(_formatPrice);
     _nameController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
@@ -139,12 +125,10 @@ class _AddProductPageState extends State<AddProductPage> {
       final firestore = FirebaseFirestore.instance;
       final productId = Uuid().v4().substring(0, 8);
 
-      final price = _priceController.text.replaceAll('Kshs.', '').trim();
-
       await firestore.collection('products').doc(productId).set({
         'id': productId,
         'name': _nameController.text,
-        'price': double.parse(price),
+        'price': double.parse(_priceController.text), // Directly parse the value
         'quantity': int.parse(_quantityController.text),
         'imageUrl': imageUrl,
         'category': _selectedCategory,
@@ -274,9 +258,7 @@ class _AddProductPageState extends State<AddProductPage> {
                                   decoration: InputDecoration(
                                     labelText: 'Price',
                                     labelStyle: GoogleFonts.poppins(color: Colors.white70),
-                                    hintText: '500',
-                                    prefixText: 'Kshs. ',
-                                    prefixStyle: GoogleFonts.poppins(color: Colors.white),
+                                    hintText: 'e.g. 500',
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: const BorderSide(color: Colors.white),
@@ -290,11 +272,10 @@ class _AddProductPageState extends State<AddProductPage> {
                                     if (value == null || value.isEmpty) {
                                       return 'Please enter a price';
                                     }
-                                    final numericValue = value.replaceAll('Kshs.', '').trim();
-                                    if (numericValue.isEmpty || !RegExp(r'^\d+$').hasMatch(numericValue)) {
+                                    if (!RegExp(r'^\d+$').hasMatch(value)) {
                                       return 'Price must be a valid number';
                                     }
-                                    if (double.parse(numericValue) <= 0) {
+                                    if (double.parse(value) <= 0) {
                                       return 'Price must be greater than 0';
                                     }
                                     return null;
@@ -420,9 +401,28 @@ class _AddProductPageState extends State<AddProductPage> {
                                     ),
                                   )
                                       : Center(
-                                    child: Text(
-                                      'No Image',
-                                      style: GoogleFonts.poppins(color: Colors.grey),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          'No Image',
+                                          style: GoogleFonts.poppins(color: Colors.grey),
+                                        ),
+                                        Text(
+                                          'JPG, JPEG, PNG, WEBP',
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.grey,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Supported',
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.grey,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),

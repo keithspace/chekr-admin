@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:open_file/open_file.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:typed_data';
+
 
 class ReceiptPage extends StatefulWidget {
   final String transactionId;
@@ -144,12 +146,17 @@ class _ReceiptPageState extends State<ReceiptPage> {
     });
 
     try {
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) throw Exception('Storage permission not granted');
-      }
-
       final pdf = pw.Document();
+      final qrData = 'Transaction ID: ${widget.transactionId}\n'
+          'Amount: KES ${widget.amount}\n'
+          'Phone: ${widget.phoneNumber}\n'
+          'Date: ${widget.timestamp.toLocal().toString().split(' ')[0]}\n'
+          'Time: ${widget.timestamp.toLocal().toString().split(' ')[1].split('.')[0]}';
+
+      // Load the logo image
+      final logoImage = await _loadImage('assets/images/logo2.png');
+      // Generate QR code image
+      final qrImage = await _generateQrImage(qrData);
 
       pdf.addPage(
         pw.Page(
@@ -158,8 +165,14 @@ class _ReceiptPageState extends State<ReceiptPage> {
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Center(child: pw.Text('CHEKR RECEIPT', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))),
-                pw.SizedBox(height: 20),
+                // Add logo image
+                pw.Center(
+                  child: pw.Container(
+                    height: 60,
+                    child: pw.Image(logoImage),
+                  ),
+                ),
+                pw.SizedBox(height: 16),
                 pw.Center(
                   child: pw.Column(
                     children: [
@@ -169,12 +182,14 @@ class _ReceiptPageState extends State<ReceiptPage> {
                     ],
                   ),
                 ),
-                pw.SizedBox(height: 20),
-                pw.Text('Transaction ID: ${widget.transactionId}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 16),
+                pw.Text('Transaction ID: ${widget.transactionId}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                 pw.Text('Date: ${widget.timestamp.toLocal().toString().split(' ')[0]}'),
                 pw.Text('Time: ${widget.timestamp.toLocal().toString().split(' ')[1].split('.')[0]}'),
                 pw.Divider(),
-                pw.Text('Products Purchased:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                pw.Text('Products Purchased:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 8),
                 ...widget.products.map((product) {
                   double price = (product['price'] ?? 0).toDouble();
@@ -205,12 +220,27 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('Total:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text('KES ${widget.amount.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Total:',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text('KES ${widget.amount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
                 pw.SizedBox(height: 20),
                 pw.Text('Payment Method: ${widget.paymode}'),
+                pw.SizedBox(height: 20),
+                pw.Center(
+                  child: pw.Text('QR Code:',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Center(
+                  child: pw.Container(
+                    width: 150,
+                    height: 150,
+                    child: pw.Image(qrImage),
+                  ),
+                ),
               ],
             );
           },
@@ -222,11 +252,31 @@ class _ReceiptPageState extends State<ReceiptPage> {
       await file.writeAsBytes(await pdf.save());
       await OpenFile.open(file.path);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
     } finally {
       setState(() {
         _isGeneratingPdf = false;
       });
     }
+  }
+
+// Helper method to load image asset
+  Future<pw.MemoryImage> _loadImage(String assetPath) async {
+    final byteData = await rootBundle.load(assetPath);
+    return pw.MemoryImage(byteData.buffer.asUint8List());
+  }
+
+// Helper method to generate QR code image
+  Future<pw.MemoryImage> _generateQrImage(String data) async {
+    final qrPainter = QrPainter(
+      data: data,
+      version: QrVersions.auto,
+      color: Colors.black,
+      emptyColor: Colors.white,
+    );
+    final image = await qrPainter.toImageData(200);
+    return pw.MemoryImage(image!.buffer.asUint8List());
   }
 }

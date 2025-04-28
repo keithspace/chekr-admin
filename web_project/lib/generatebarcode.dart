@@ -85,7 +85,7 @@ class ProductCard extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerRight,
                     child: Icon(
-                      Icons.barcode_reader,
+                      Icons.settings,
                       color: Colors.white70,
                       size: constraints.maxWidth * 0.06,
                     ),

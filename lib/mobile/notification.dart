@@ -82,7 +82,7 @@ class NotificationsPage extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.all(32.0),
                 child: Text(
-                  'No notifications available',
+                  'No new notifications',
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
               ),

@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'account.dart';
 import 'landing.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'biometric_auth.dart'; // The file we created earlier
 
 class AccountDetailsPage extends StatefulWidget {
   const AccountDetailsPage({Key? key}) : super(key: key);
@@ -21,6 +23,7 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
   final TextEditingController _newEmailController = TextEditingController();
   final TextEditingController _newPhoneController = TextEditingController();
   final TextEditingController _newUsernameController = TextEditingController();
+  final storage = const FlutterSecureStorage();
 
   String? email;
   String? phone;
@@ -30,6 +33,10 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
   void initState() {
     super.initState();
     _fetchUserDetails();
+  }
+
+  Future<bool> _getBiometricSetting() async {
+    return await storage.read(key: 'use_biometric') == 'true';
   }
 
   void _fetchUserDetails() async {
@@ -504,7 +511,6 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: <Widget>[
-            // Add this new ListTile for username
             ListTile(
               title: const Text('Username', style: TextStyle(fontSize: 16)),
               subtitle: Text(username ?? 'Not set', style: TextStyle(fontSize: 14)),
@@ -537,6 +543,34 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
               ),
             ),
             const Divider(),
+            // Add the biometric login toggle here
+            FutureBuilder<bool>(
+              future: _getBiometricSetting(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const ListTile(
+                    title: Text('Loading biometric settings...'),
+                  );
+                }
+                return SwitchListTile(
+                  title: const Text('Enable Biometric Login'),
+                  value: snapshot.data ?? false,
+                  onChanged: (value) async {
+                    if (value) {
+                      final isAvailable = await BiometricAuth.isBiometricAvailable();
+                      if (!isAvailable) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Biometric authentication not available')),
+                        );
+                        return;
+                      }
+                    }
+                    await storage.write(key: 'use_biometric', value: value.toString());
+                    setState(() {});
+                  },
+                );
+              },
+            ),
             ListTile(
               title: const Text('Delete Account', style: TextStyle(fontSize: 16, color: Colors.red)),
               onTap: _showDeleteConfirmation,

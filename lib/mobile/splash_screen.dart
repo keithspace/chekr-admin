@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'login.dart';
 import 'home.dart';
 import 'landing.dart';
+import 'biometric_auth.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -55,6 +56,22 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(milliseconds: 1500));
 
     try {
+      // Check if user has enabled biometric login
+      final bool useBiometric = await storage.read(key: 'use_biometric') == 'true';
+      final bool isBiometricAvailable = await BiometricAuth.isBiometricAvailable();
+
+      // If biometric is enabled and available, try to authenticate
+      if (useBiometric && isBiometricAvailable) {
+        final bool isAuthenticated = await BiometricAuth.authenticate();
+        if (!isAuthenticated) {
+          // Biometric auth failed or was cancelled, go to login
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
+          return;
+        }
+      }
       // Check both Firebase auth state and stored token
       final user = _auth.currentUser;
       final token = await storage.read(key: 'auth_token');

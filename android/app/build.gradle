@@ -1,31 +1,34 @@
 plugins {
     id "com.android.application"
-    //id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
     id 'com.google.gms.google-services'
 }
 
 dependencies {
     // Import the Firebase BoM
-    implementation platform('com.google.firebase:firebase-bom:33.12.0')
+    implementation platform('com.google.firebase:firebase-bom:33.13.0')
 
     // Firebase dependencies
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-firestore'
     implementation 'com.google.firebase:firebase-messaging'
 
-    // Core library desugaring dependency
+    // Core library desugaring
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 
-    //implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    // Biometric dependencies
+    implementation 'androidx.biometric:biometric:1.2.0-alpha05' // Recommended for better biometric support
     implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha07' // For secure storage
+
+    // Other UI dependencies
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
 }
 
 android {
     namespace = "com.example.checkoutapp"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35 // Explicitly set to latest stable version
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -34,21 +37,25 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
-    //kotlinOptions {
-      //  jvmTarget = JavaVersion.VERSION_17
-    //}
-
     defaultConfig {
         applicationId = "com.example.checkoutapp"
-        minSdk = 23
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 23 // Minimum for biometrics
+        targetSdk = 34 // Match compileSdk
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Add this for biometric support
+        manifestPlaceholders = [
+                'authRedirectScheme': 'com.example.checkoutapp'
+        ]
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.debug
+            // Consider adding proguard rules for release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }
